@@ -1,0 +1,4 @@
+#!/bin/bash
+
+cd /etc/phaselimiter
+pyenv exec pipenv run python script/create_reference.py --task "$@"

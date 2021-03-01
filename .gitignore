@@ -1,0 +1,42 @@
+!.gitkeep
+/tmp
+
+# cmake
+CMakeCache.txt
+CMakeFiles
+CMakeScripts
+Makefile
+cmake_install.cmake
+install_manifest.txt
+
+# generated version header
+version.h
+
+# visual studio
+*.opensdf
+*.dir
+*.vcxproj
+*.vcxproj.filters
+*.vcxproj.user
+*.sln
+*.sdf
+*.suo
+/Win32
+/bin
+/lib
+*.opendb
+*.VC.db
+/x64
+
+# mac
+*.build
+*.xcodeproj
+
+/Debug
+/Release
+/SharedPrecompiledHeaders
+*CXX_cotire.cmake
+
+/resource/sound_quality2_cache
+/build
+/built

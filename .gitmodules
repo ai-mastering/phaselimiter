@@ -1,0 +1,24 @@
+[submodule "deps/picojson"]
+	path = deps/picojson
+	url = https://github.com/kazuho/picojson.git
+[submodule "deps/eigen"]
+	path = deps/eigen
+	url = https://github.com/eigenteam/eigen-git-mirror.git
+[submodule "deps/libsimdpp"]
+	path = deps/libsimdpp
+	url = https://github.com/p12tic/libsimdpp.git
+[submodule "deps/hnsw"]
+	path = deps/hnsw
+	url = https://github.com/contribu/hnswlib.git
+[submodule "deps/googletest"]
+	path = deps/googletest
+	url = https://github.com/google/googletest.git
+[submodule "deps/optim"]
+	path = deps/optim
+	url = https://github.com/contribu/optim.git
+[submodule "deps/CImg"]
+	path = deps/CImg
+	url = https://github.com/dtschump/CImg.git
+[submodule "deps/tiny-process-library"]
+	path = deps/tiny-process-library
+	url = https://github.com/contribu/tiny-process-library.git

@@ -1,0 +1,280 @@
+version: 2.0
+
+references:
+  container_config: &container_config
+    working_directory: /root/work
+    docker:
+      - image: contribu/buildenv_large:cosmic
+        environment:
+          - LANG: C.UTF-8
+          - LANGUAGE: C.UTF-8
+          - LC_ALL: C.UTF-8
+          - CC: "/tmp/oom_exec.sh ccache gcc"
+          - CXX: "/tmp/oom_exec.sh ccache g++"
+          - USE_CCACHE: 1
+          - CCACHE_DIR: /ccache
+          - CMAKE_COMMAND: 'cmake -GNinja' # ninjaのほうが、oom killer発動後の復旧が速い気がする
+          - MAKE_COMMAND: 'ninja -j 12 || ninja -j 4 || ninja -j 2 || ninja -j 1 || ninja -j 1 || ninja -j 1 || ninja -j 1 || ninja -j 1'
+    resource_class: xlarge
+  save_cache: &save_ccache
+    key: ccache-{{ .Branch }}-{{ epoch }}
+    paths:
+    - /ccache
+    when: always
+# ビルドは並列化すると、メモリ不足で失敗する。audio_analyzer/main.cppが元凶
+jobs:
+  build:
+    <<: *container_config
+    steps:
+      - checkout
+      - run: cat /proc/cpuinfo
+      - run: cp .circleci/oom_exec.sh /tmp && chmod +x /tmp/oom_exec.sh
+      - run: mkdir -p /tmp/results
+      - run: git clone --single-branch --depth 1 https://github.com/google/gtest-parallel.git /tmp/gtest-parallel && ln -s /tmp/gtest-parallel/gtest-parallel /usr/bin/gtest-parallel
+      - run: ccache -M 1000M
+      - restore_cache:
+          keys:
+          - ccache-{{ .Branch }}-
+          - ccache-
+          paths:
+          - /ccache
+      - run: ccache --show-stats
+      - run: ccache -z
+      - run: ccache --show-stats
+      - run:
+          command: vmstat 10
+          background: true
+      - run:
+          command: while true; do sleep 10; sh .circleci/drop_caches.sh; done
+          background: true
+      - run:
+          command: |
+            git clone --single-branch --depth 1 -b master https://github.com/ai-mastering/bakuage_dataset1.git /tmp/bakuage_dataset1
+            touch /tmp/bakuage_dataset1_clone_finished
+          background: true
+      - run: git submodule update --init --recursive
+      - run:
+          name: install hyperfine
+          command: |
+            cd /tmp
+            wget https://github.com/sharkdp/hyperfine/releases/download/v1.5.0/hyperfine_1.5.0_amd64.deb
+            dpkg -i hyperfine_1.5.0_amd64.deb
+      - type: cache-restore
+        key: bundle-{{ checksum "Gemfile.lock" }}
+      - run: bundle install --jobs=4 --retry=3 --path /tmp/bundle
+      - type: cache-save
+        key: bundle-{{ checksum "Gemfile.lock" }}
+        paths:
+        - /tmp/bundle
+      - run: bundle exec rubocop -a
+      - run: git diff --exit-code
+#      - run:
+#          name: cppcheck
+#          command: |
+#            sh .circleci/run_cppcheck.sh
+      - run:
+          name: build release version (for sandy bridge)
+          command: |
+            exit 0
+
+            mkdir -p /tmp/sandybridge
+            cp -R ./* /tmp/sandybridge/
+            cd /tmp/sandybridge
+            $CMAKE_COMMAND -DCMAKE_BUILD_TYPE=Release -DSANDYBRIDGE_SUPPORT=ON .
+            bash -c "$MAKE_COMMAND"
+
+            find bin -type f | xargs -n 1 -P $(nproc) strip
+            find bin -type f | grep -v build_test | xargs -n 1 -P $(nproc) upx --lzma
+            cp -R bin /tmp/results/bin_sandybridge
+            cp -R CMakeFiles /tmp/results/CMakeFiles_sandybridge
+      - run: ccache --show-stats
+      - save_cache: *save_ccache
+      - run:
+          name: build release version
+          command: |
+            # PGOは効果ない
+            $CMAKE_COMMAND -DCMAKE_BUILD_TYPE=Release -DSANDYBRIDGE_SUPPORT=ON .
+            bash -c "$MAKE_COMMAND"
+
+            find bin -type f | xargs -n 1 -P $(nproc) strip
+            find bin -type f | grep -v build_test | xargs -n 1 -P $(nproc) upx --lzma
+            cp -R bin /tmp/results/bin
+            cp -R CMakeFiles /tmp/results/CMakeFiles
+      - run: ccache --show-stats
+      - save_cache: *save_ccache
+      - run:
+          name: create sound_quality2_cache for test (small size)
+          command: |
+            cd resource
+            ../bin/audio_analyzer --mode=sound_quality2_preparation --analysis_data_dir=./analysis_data --sound_quality2_cache=./sound_quality2_cache
+            mv ./sound_quality2_cache /tmp/results/
+      - run:
+          name: build valgrind version
+          command: |
+            mkdir -p /tmp/valgrind
+            cp -R ./* /tmp/valgrind/
+            cd /tmp/valgrind
+            rm -f CMakeCache.txt
+            $CMAKE_COMMAND -DCMAKE_BUILD_TYPE=Debug
+            bash -c "$MAKE_COMMAND"
+      - run: ccache --show-stats
+      - save_cache: *save_ccache
+      - run:
+          name: valgrind audio_analyzer
+          command: |
+            cd /tmp/valgrind/resource
+            valgrind --error-exitcode=1 ../bin/audio_analyzer \
+              --input=../test_data/test5.wav --mastering3_acoustic_entropy_band_count=10 \
+              --spectrogram_output=/tmp/spectrogram_output.png \
+              --spectrum_distribution_output=/tmp/spectrum_distribution_output.png \
+              --stereo_distribution_output=/tmp/stereo_distribution_output.png \
+              --analysis_data_dir=./analysis_data \
+              --sound_quality2 \
+              --sound_quality2_cache=/tmp/results/sound_quality2_cache
+            touch /tmp/background_valgrind_audio_analyzer_finished
+          background: true
+      - run:
+          name: valgrind phase_limiter
+          command: |
+            cd /tmp/valgrind/resource
+            valgrind --error-exitcode=1 ../bin/phase_limiter --input=../test_data/test5.wav --output=/tmp/output.wav --mastering=true --mastering_reverb=false --max_iter1=20 --limiter_external_oversample=2 --limiting_error_spectrogram_output=/tmp/spec.png --grad_output=/tmp/grad.wav
+            touch /tmp/background_valgrind_phase_limiter_finished
+          background: true
+      - run:
+          name: valgrind phase_limiter2
+          command: |
+            cd /tmp/valgrind/resource
+            valgrind --error-exitcode=1 ../bin/phase_limiter --input=../test_data/test5.wav --output=/tmp/output.wav --mastering=true --mastering_mode=mastering3 --mastering3_iteration=10 --reference=-10 --reference_mode=peak --max_iter1=20
+            touch /tmp/background_valgrind_phase_limiter_finished2
+          background: true
+      - run:
+          name: valgrind phase_limiter3
+          command: |
+            cd /tmp/valgrind/resource
+            valgrind --error-exitcode=1 ../bin/phase_limiter --input=../test_data/test5.wav --output=/tmp/output.wav --mastering=true --mastering_mode=mastering5 --sound_quality2_cache=/tmp/results/sound_quality2_cache --reference=-10 --reference_mode=peak --max_iter1=20
+            touch /tmp/background_valgrind_phase_limiter_finished3
+          background: true
+      - run:
+          name: valgrind phase_limiter4
+          command: |
+            cd /tmp/valgrind/resource
+            valgrind --error-exitcode=1 ../bin/phase_limiter --input=../test_data/test5.wav --output=/tmp/output.wav --mastering=true --mastering_mode=mastering5 --sound_quality2_cache=/tmp/results/sound_quality2_cache --reference=-10 --reference_mode=peak --max_iter1=20 --mastering5_mastering_reference_file=./mastering_reference.json --ceiling_mode=lowpass_true_peak
+            touch /tmp/background_valgrind_phase_limiter_finished4
+          background: true
+      - run:
+          name: valgrind audio_visualizer
+          command: |
+            cd /tmp/valgrind/resource
+            valgrind --error-exitcode=1 ../bin/audio_visualizer --input=../test_data/test5.wav --output=/tmp --background=../test_data/icon_blue.jpg --foreground=../test_data/icon_blue.png --width=640 --height=360 --fps=25
+            touch /tmp/background_valgrind_audio_visualizer_finished
+          background: true
+      - run:
+          name: valgrind clear_mixer
+          command: |
+            cd /tmp/valgrind/resource
+            valgrind --error-exitcode=1 ../bin/clear_mixer --input=../test_data/test5.wav,../test_data/test5.wav --output=/tmp/clear_mixer.wav
+            touch /tmp/background_valgrind_clear_mixer_finished
+          background: true
+      - run:
+          name: valgrind test (run all except valgrind not compatible tests and slow tests)
+          command: |
+            cd /tmp/valgrind
+            valgrind --error-exitcode=1 bin/test --gtest_filter=-JsFilterTest*:ClearMixerFilter*:SoundQuality2Calculator.Validation
+            touch /tmp/background_valgrind_test_finished
+          background: true
+      - run:
+          name: create sound_quality2_cache.txt (for ProMeter)
+          command: |
+            while [ ! -f /tmp/bakuage_dataset1_clone_finished ]; do sleep 1; done
+            bin/audio_analyzer --mode sound_quality2_preparation --analysis_data_dir /tmp/bakuage_dataset1/analysis_shortpath --sound_quality2_cache /tmp/results/sound_quality2_cache.txt --sound_quality2_cache_archiver text
+          background: true
+      - run:
+          name: test (run all except JsFilterTest(cause segmentation fault 11))
+          command: |
+            while [ ! -f /tmp/bakuage_dataset1_clone_finished ]; do sleep 1; echo "waiting"; done
+            bin/test --gtest_filter=-JsFilterTest* --sound_quality2_analysis_data=/tmp/bakuage_dataset1/analysis_shortpath
+            # 表示がおかしいし、失敗する(おそらくメモリ？)
+            # gtest-parallel -w `nproc` bin/test --gtest_filter=-JsFilterTest* -- --sound_quality2_analysis_data=/tmp/bakuage_dataset1/analysis_shortpath
+          no_output_timeout: 60m
+      - run:
+          name: create test output audio
+          command: |
+            exit 0
+
+            cd resource
+            ../bin/audio_analyzer --input=../test_data/test5.wav \
+              --spectrogram_output=/tmp/results/spectrogram_output.png \
+              --spectrum_distribution_output=/tmp/results/spectrum_distribution_output.png \
+              --stereo_distribution_output=/tmp/results/stereo_distribution_output.png \
+              --analysis_data_dir=./analysis_data \
+              --sound_quality2_cache=/tmp/results/sound_quality2_cache \
+              > /tmp/results/audio_analyzer_result.json
+            /usr/bin/time -v ../bin/phase_limiter --input=../test_data/test2.wav --output=/tmp/results/test2_output_ceiling.wav --ceiling=-24 --ceiling_mode=true_peak --reference_mode=youtube_loudness --reference=-10.3
+            /usr/bin/time -v ../bin/phase_limiter --input=../test_data/test2.wav --output=/tmp/results/test2_output_quiet.mp3 --reference=-12 --output_format=mp3
+            /usr/bin/time -v ../bin/phase_limiter --input=../test_data/test2.wav --output=/tmp/results/test2_output_mastering_range.wav --mastering --start_at=0 --end_at=3
+            /usr/bin/time -v ../bin/phase_limiter --input=../test_data/test2.wav --output=/tmp/results/test2_output_mastering_range_over.wav --mastering --start_at=0 --end_at=1000
+            /usr/bin/time -v ../bin/phase_limiter --input=../test_data/test2.wav --output=/tmp/results/test2_output_mastering_range_48khz.wav --mastering --start_at=0.7 --end_at=1.7 --sample_rate=48000
+            /usr/bin/time -v ../bin/phase_limiter --input=../test_data/test2.wav --output=/tmp/results/test2_output_mastering_range.mp3 --mastering --start_at=0.7 --end_at=1.7 --output_format=mp3
+            /usr/bin/time -v ../bin/phase_limiter --input=../test_data/test2.wav --output=/tmp/results/test2_output_mastering.mp3 --mastering --mastering_reverb=false --output_format=mp3 --limiter_external_oversample=2 --limiting_error_spectrogram_output=/tmp/results/test2_output_mastering_limiting_error_spectrogram.png --grad_output=/tmp/results/test2_output_mastering_grad.wav
+            /usr/bin/time -v ../bin/phase_limiter --input=../test_data/test2.wav --output=/tmp/results/test2_output_mastering3.mp3 --mastering --mastering_mode=mastering3 --output_format=mp3
+            cp /tmp/output_* /tmp/results/
+
+            exit 0
+            echo "以前、以下のコマンドでsegmentation faultになるが、テストやvalgrindはパスしてしまう現象があったので、検知用に実行"
+            echo "ついでに、音源もアップロードする。(以前fmaを実験したときに、linuxでだけ、erb_eval_func_weighting:1	input:test_data/test2.wav	loudness:-3.0	iter:25600	initial_noise:1	normalized_eval:0.0671344の出力音源が壊れていたことがあったので)"
+            cd ../
+            mkdir bin/Release
+            cp bin/phase_limiter bin/Release/
+            bundle exec ruby script/analyze_phase_limiter.rb eval --input test_data/test2.wav  --erb_eval_func_weighting 1 --loudness m7 m5 m3 --iter 25 50 75 100 150 200 300 400 800 1600 3200 6400 12800 25600 --initial_noise 1
+            rm -rf bin/Release
+      - run:
+          name: create detection_preparation (TODO cache pipenv install)
+          command: |
+            # 計算誤差があるのでgit diffのあと
+            pyenv exec pipenv install
+            find script/ | grep '\.py$' | xargs pyenv exec pipenv run autopep8 -i
+
+            # なぜかあるときから遅くなったので、ここでは計算せずに事前に計算してリポジトリに保存しておくことにした。
+            exit 0
+            pyenv exec pipenv run python script/create_reference.py --task prepare_for_detection > resource/detection_preparation.json
+            pyenv exec pipenv run python script/create_reference.py --task prepare_for_detection --genre_regex "pop|ポップ" > resource/detection_preparation_pop.json
+            pyenv exec pipenv run python script/create_reference.py --task prepare_for_detection --genre_regex "classic|クラシック" > resource/detection_preparation_classical.json
+            pyenv exec pipenv run python script/create_reference.py --task prepare_for_detection --genre_regex "jazz|ジャズ" > resource/detection_preparation_jazz.json
+      - run: bundle exec rspec
+      - run: true || (bin/bench || echo 'ignore fail')
+      - run: hyperfine -w 1 -m 10 'bin/audio_analyzer --input test_data/test2.wav --sound_quality2_cache=/tmp/results/sound_quality2_cache 1>/dev/null 2>/dev/null'
+      - run: hyperfine -w 1 -m 10 'bin/phase_limiter --input test_data/test2.wav --output /tmp/output.wav 1>/dev/null 2>/dev/null'
+      - run: hyperfine -w 1 -m 10 'bin/phase_limiter --input test_data/test2.wav --output /tmp/output.wav --mastering=true --mastering_mode=mastering5 --sound_quality2_cache=/tmp/results/sound_quality2_cache 1>/dev/null 2>/dev/null'
+      - run:
+          name: wait background run
+          command: |
+            while [ ! -f /tmp/background_valgrind_audio_analyzer_finished ]; do sleep 1; echo "waiting"; done
+            while [ ! -f /tmp/background_valgrind_phase_limiter_finished ]; do sleep 1; echo "waiting"; done
+            while [ ! -f /tmp/background_valgrind_phase_limiter_finished2 ]; do sleep 1; echo "waiting"; done
+            while [ ! -f /tmp/background_valgrind_phase_limiter_finished3 ]; do sleep 1; echo "waiting"; done
+            while [ ! -f /tmp/background_valgrind_phase_limiter_finished4 ]; do sleep 1; echo "waiting"; done
+            while [ ! -f /tmp/background_valgrind_audio_visualizer_finished ]; do sleep 1; echo "waiting"; done
+            while [ ! -f /tmp/background_valgrind_clear_mixer_finished ]; do sleep 1; echo "waiting"; done
+            while [ ! -f /tmp/background_valgrind_test_finished ]; do sleep 1; echo "waiting"; done
+      - run:
+          name: tar
+          command: |
+            (
+              mv bin built
+              mv .circleci/executable_licenses ./
+              mkdir -p /tmp/phaselimiter_build
+              cp -r . /tmp/phaselimiter_build/phaselimiter
+              cd /tmp/phaselimiter_build
+              tar -Jcf /tmp/results/release.tar.xz -T phaselimiter/.circleci/release_files.txt
+            )
+      - store_artifacts:
+          path: /tmp/results
+          destination: results
+workflows:
+  version: 2
+  main:
+    jobs:
+    - build:
+        filters:
+          branches:
+            ignore: build/linux

@@ -1,0 +1,31 @@
+AllCops:
+  Exclude:
+    - 'bin/**/*'
+    - 'deps/**/*'
+  TargetRubyVersion: 2.5
+Rails:
+  Enabled: true
+AsciiComments:
+  Enabled: false
+Layout/IndentArray:
+  EnforcedStyle: consistent
+Metrics/BlockLength:
+  Enabled: false
+Metrics/LineLength:
+  Enabled: false
+Metrics/MethodLength:
+  Enabled: false
+Metrics/AbcSize:
+  Enabled: false
+ParameterLists:
+  CountKeywordArgs: false
+Style/Documentation:
+  Enabled: false
+Style/ClassAndModuleChildren:
+  Enabled: false
+Lint/UnusedBlockArgument:
+  Enabled: false
+CyclomaticComplexity:
+  Max: 8
+Metrics/ClassLength:
+  Max: 300

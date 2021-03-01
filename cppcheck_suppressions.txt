@@ -1,0 +1,24 @@
+// *:deps/*
+// *:src/bakuage/miniz.cpp
+// *:src/bakuage/duk_config.h
+// *:src/bakuage/duktape.cpp
+unusedFunction
+missingInclude
+knownConditionTrueFalse
+identicalInnerCondition
+useInitializationList
+syntaxError
+unusedVariable
+unreadVariable
+shadowVar
+useStlAlgorithm
+noExplicitConstructor
+duplicateCondition
+cstyleCast
+shadowFunction
+unusedStructMember
+redundantAssignment
+variableScope
+duplicateAssignExpression
+uninitMemberVar:src/bakuage/memory.h
+noConstructor:src/bakuage/dft.h
