@@ -1,8 +1,8 @@
 ## phaselimiter
 
-音圧爆上げくんで使われているリミッターと自動マスタリング
-
 A high quality audio limiter and an automated mastering algorithm written in C++. 
+
+音圧爆上げくんで使われているリミッターと自動マスタリング
 
 ## project status
 
@@ -19,8 +19,13 @@ MIT
 
 todo
 
+prebuilt linux executables are available here
+
+https://github.com/ai-mastering/phaselimiter/releases
+
 ## runtime dependencies
 
+- pipenv (python 3)
 - ffmpeg (command line program)
 - libtbb.so
 - libtbbmalloc.so
