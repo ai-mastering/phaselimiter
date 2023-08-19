@@ -106,11 +106,9 @@ if(WIN32)
   )
   set(CONDA_ROOT $ENV{CONDA_ROOT})
   link_directories(${CONDA_ROOT}/Library/lib)
-  include_directories(
-  	${BAKUAGE_PREBUILT_DIR}/include
-    ${CONDA_ROOT}/include
-    ${CONDA_ROOT}/Library/include
-  )
+  include_directories(${BAKUAGE_PREBUILT_DIR}/include)
+  include_directories(${CONDA_ROOT}/include)
+  include_directories(${CONDA_ROOT}/Library/include)
   include_directories(prebuilt/win64/optim/header_only_version)
   set(TINY_PROCESS_SOURCES
     deps/tiny-process-library/process.hpp
