@@ -167,7 +167,7 @@ else()
   # -fopt-info-vec-optimized-missed
   # auto vectorizeはそれほど速くならない。(理由: auto vectorizeできるようなところはそもそも単純で遅くない？)
   # 出力が冗長になるのでオフにした
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11 -frecord-gcc-switches -Werror -Wall -Wno-sign-compare -Wno-unused-variable -Wno-unused-but-set-variable")
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++14 -frecord-gcc-switches -Werror -Wall -Wno-sign-compare -Wno-unused-variable -Wno-unused-but-set-variable")
   if(SANDYBRIDGE_SUPPORT)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -march=sandybridge -mtune=sandybridge -mavx")
   else()
