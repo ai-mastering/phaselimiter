@@ -13,6 +13,17 @@ jobs:
       - uses: actions/checkout@v3.5.3
         with:
           submodules: recursive
+      - run: |
+          conda install -y -c conda-forge \
+            boost==1.63.0 \
+            armadillo==12.6.2 \
+            libsndfile==1.2.2 \
+            gflags==2.2.2 \
+            benchmark==1.8.2
+          conda install -y -c intel \
+            tbb-devel==2021.10.0 \
+            ipp-devel==2021.9.0
+        shell: bash
       - run: mkdir -p /tmp/results
         shell: bash
       - name: build release version
