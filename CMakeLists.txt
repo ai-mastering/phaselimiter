@@ -237,6 +237,7 @@ add_subdirectory(deps/googletest)
 endif()
 
 set(GFLAGS_BUILD_gflags_LIB ON)
+set(GFLAGS_BUILD_gflags_nothreads_LIB OFF)
 add_subdirectory(deps/gflags)
 
 if(WIN32)
