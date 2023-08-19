@@ -32,6 +32,8 @@ else()
   add_compile_definitions(BA_FMA_ENABLED)
 endif()
 
+option(DISABLE_BENCH "disable bench" OFF)
+
 # arma_H5Ovisitが見つからないエラー回避 https://stackoverflow.com/questions/62590370/c-armadillo-procedure-entry-point-h5ovisit-could-not-be-located-in-libarmadi
 add_definitions(-DARMA_DONT_USE_HDF5)
 
@@ -135,7 +137,6 @@ elseif(APPLE)
      /opt/intel/ipp/lib/libipps.dylib
      /opt/intel/ipp/lib/libippvm.dylib
      /opt/intel/ipp/lib/libippcore.dylib
-     libbenchmark.a
      libpng.a
      libz.a
      pthread
@@ -194,7 +195,6 @@ else()
      libipps.a
      libippcore.a
      libippvm.a
-     libbenchmark.a
      libpng.a
      libz.a
      liblapack.so # require for armadillo
@@ -321,9 +321,13 @@ target_link_libraries(effect_test
 bakuage
 )
 
+if(DISABLE_BENCH)
+else()
 file(GLOB BAKUAGE_BENCH_SOURCES src/bench/* src/phase_limiter/Grad*.cpp)
 message("BAKUAGE_BENCH_SOURCES: ${BAKUAGE_BENCH_SOURCES}")
 add_executable(bench ${BAKUAGE_BENCH_SOURCES})
 target_link_libraries(bench
 bakuage
+libbenchmark.a
 )
+endif()
