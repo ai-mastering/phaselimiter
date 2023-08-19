@@ -205,6 +205,7 @@ jobs:
           path: /tmp/results
       - run: mv /tmp/results/bin ./bin
       - run: chmod +x ./bin/*
+      - run: bin/bench || echo 'ignore fail'
       - run: hyperfine -w 1 -m 10 'bin/audio_analyzer --input test_data/test2.wav --sound_quality2_cache=/tmp/results/sound_quality2_cache 1>/dev/null 2>/dev/null'
       - run: hyperfine -w 1 -m 10 'bin/phase_limiter --input test_data/test2.wav --output /tmp/output.wav 1>/dev/null 2>/dev/null'
       - run: hyperfine -w 1 -m 10 'bin/phase_limiter --input test_data/test2.wav --output /tmp/output.wav --mastering=true --mastering_mode=mastering5 --sound_quality2_cache=/tmp/results/sound_quality2_cache 1>/dev/null 2>/dev/null'
