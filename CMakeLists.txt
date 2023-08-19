@@ -86,6 +86,8 @@ if(WIN32)
   # set(Boost_COMPILER "-vc142")
   set(Boost_DEBUG OFF)
   find_package(Boost REQUIRED system filesystem serialization math_tr1 iostreams)
+  include_directories(${Boost_INCLUDE_DIRS})
+  link_directories(${Boost_LIBRARY_DIRS})
 
   set(BAKUAGE_LINK_LIBRARIES
     # ${BAKUAGE_LIB_DIR}/libfftw3-3.lib
@@ -100,13 +102,10 @@ if(WIN32)
     ippvmmt.lib
     ${Boost_LIBRARIES}
   )
-  link_directories(
-    ${Boost_LIBRARY_DIRS}
-    ${CONDA_ROOT}/Library/lib
-  )
+  set(CONDA_ROOT $ENV{CONDA_ROOT})
+  link_directories(${CONDA_ROOT}/Library/lib)
   include_directories(
   	${BAKUAGE_PREBUILT_DIR}/include
-  	${Boost_INCLUDE_DIRS}
     ${CONDA_ROOT}/include
   )
   set(TINY_PROCESS_SOURCES
