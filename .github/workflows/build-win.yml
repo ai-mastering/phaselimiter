@@ -20,15 +20,15 @@ jobs:
       - run: conda info
         shell: bash -el {0}
       - run: |
-          conda install -y -c conda-forge \
-            boost==1.82.0 \
-            armadillo==12.6.2
-        shell: bash -el {0}
-      - run: |
           conda install -y -c intel \
             tbb-devel==2019.2 \
             ipp-include==2019.2 \
             ipp-static==2019.2
+        shell: bash -el {0}
+      - run: |
+          conda install -y -c conda-forge \
+            boost==1.82.0 \
+            armadillo==12.6.2
         shell: bash -el {0}
       - run: conda list
         shell: bash -el {0}
