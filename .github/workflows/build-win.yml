@@ -21,7 +21,8 @@ jobs:
         shell: bash -el {0}
       - run: |
           conda install -y -c conda-forge \
-            boost==1.82.0
+            boost==1.82.0 \
+            armadillo==12.6.2
         shell: bash -el {0}
       - run: |
           conda install -y -c intel \
