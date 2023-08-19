@@ -102,12 +102,12 @@ if(WIN32)
   )
   link_directories(
     ${Boost_LIBRARY_DIRS}
-  	${IPPROOT}/lib
+    ${CONDA_ROOT}/Library/lib
   )
   include_directories(
   	${BAKUAGE_PREBUILT_DIR}/include
   	${Boost_INCLUDE_DIRS}
-  	${IPPROOT}/include
+    ${CONDA_ROOT}/include
   )
   set(TINY_PROCESS_SOURCES
     deps/tiny-process-library/process.hpp
