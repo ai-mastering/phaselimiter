@@ -72,7 +72,7 @@ if(WIN32)
     ${BAKUAGE_LIB_DIR}/libfftw3f-3.lib
     ${BAKUAGE_LIB_DIR}/libFLAC_dynamic.lib
     ${BAKUAGE_LIB_DIR}/libsndfile-1.lib
-    ${BAKUAGE_LIB_DIR}/gflags_static.lib
+    # ${BAKUAGE_LIB_DIR}/gflags_static.lib
     shlwapi.lib
     ippimt.lib
     ippsmt.lib
@@ -120,7 +120,7 @@ elseif(APPLE)
   set(BAKUAGE_LINK_LIBRARIES
      # libfftw3.a
      # libfftw3f.a
-     libgflags.dylib
+     # libgflags.dylib
      libsndfile.a
      # libFLAC.a
      # libvorbisenc.a
@@ -177,7 +177,7 @@ else()
   set(BAKUAGE_LINK_LIBRARIES
    	 # libfftw3.a
    	 # libfftw3f.a
-     libgflags.a
+     # libgflags.a
      libsndfile.so
      # libFLAC.a
      # libvorbisenc.a
@@ -219,6 +219,8 @@ else()
 endif()
 
 add_subdirectory(deps/googletest)
+set(GFLAGS_BUILD_gflags_LIB ON)
+add_subdirectory(deps/gflags)
 
 if(WIN32)
 else()
@@ -269,6 +271,7 @@ message("BAKUAGE_SND_FILE_INFO_SOURCES: ${BAKUAGE_SND_FILE_INFO_SOURCES}")
 add_executable(snd_file_info ${BAKUAGE_SND_FILE_INFO_SOURCES})
 target_link_libraries(snd_file_info
   bakuage
+  gflags::gflags
 )
 
 file(GLOB BAKUAGE_AUDIO_ANALYZER_SOURCES src/audio_analyzer/*)
@@ -276,6 +279,7 @@ message("BAKUAGE_AUDIO_ANALYZER_SOURCES: ${BAKUAGE_AUDIO_ANALYZER_SOURCES}")
 add_executable(audio_analyzer ${BAKUAGE_AUDIO_ANALYZER_SOURCES} ${TINY_PROCESS_SOURCES})
 target_link_libraries(audio_analyzer
   bakuage
+  gflags::gflags
 )
 
 file(GLOB BAKUAGE_TEST_SOURCES src/test/*)
@@ -284,6 +288,7 @@ add_executable(test ${BAKUAGE_TEST_SOURCES})
 target_link_libraries(test
   bakuage
   gtest
+  gflags::gflags
 )
 
 file(GLOB BAKUAGE_PHASE_LIMITER_SOURCES src/phase_limiter/*)
@@ -291,6 +296,7 @@ message("BAKUAGE_PHASE_LIMITER_SOURCES: ${BAKUAGE_PHASE_LIMITER_SOURCES}")
 add_executable(phase_limiter ${BAKUAGE_PHASE_LIMITER_SOURCES} ${TINY_PROCESS_SOURCES})
 target_link_libraries(phase_limiter
   bakuage
+  gflags::gflags
 )
 
 file(GLOB BAKUAGE_SPECTROGRAM_SOURCES src/spectrogram/*)
@@ -298,6 +304,7 @@ message("BAKUAGE_SPECTROGRAM_SOURCES: ${BAKUAGE_SPECTROGRAM_SOURCES}")
 add_executable(spectrogram ${BAKUAGE_SPECTROGRAM_SOURCES})
 target_link_libraries(spectrogram
 bakuage
+gflags::gflags
 )
 
 file(GLOB BAKUAGE_AUDIO_VISUALIZER_SOURCES src/audio_visualizer/*)
@@ -305,6 +312,7 @@ message("BAKUAGE_AUDIO_VISUALIZER_SOURCES: ${BAKUAGE_AUDIO_VISUALIZER_SOURCES}")
 add_executable(audio_visualizer ${BAKUAGE_AUDIO_VISUALIZER_SOURCES})
 target_link_libraries(audio_visualizer
 bakuage
+gflags::gflags
 )
 
 file(GLOB BAKUAGE_CLEAR_MIXER_SOURCES src/clear_mixer/*)
@@ -312,6 +320,7 @@ message("BAKUAGE_CLEAR_MIXER_SOURCES: ${BAKUAGE_CLEAR_MIXER_SOURCES}")
 add_executable(clear_mixer ${BAKUAGE_CLEAR_MIXER_SOURCES})
 target_link_libraries(clear_mixer
 bakuage
+gflags::gflags
 )
 
 file(GLOB BAKUAGE_EFFECT_TEST_SOURCES src/effect_test/*)
@@ -319,6 +328,7 @@ message("BAKUAGE_EFFECT_TEST_SOURCES: ${BAKUAGE_EFFECT_TEST_SOURCES}")
 add_executable(effect_test ${BAKUAGE_EFFECT_TEST_SOURCES})
 target_link_libraries(effect_test
 bakuage
+gflags::gflags
 )
 
 if(DISABLE_BENCH)
