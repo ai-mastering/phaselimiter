@@ -1,0 +1,49 @@
+name: build-win
+on:
+  push:
+env:
+  CMAKE_COMMAND: 'cmake'
+  MAKE_COMMAND: 'cmake --build .'
+#  MAKE_COMMAND: 'cmake --build . --target all'
+#  MAKE_COMMAND: 'msbuild all.vcxproj /t:build /p:configuration=Release /p:platform=x64 -maxcpucount'
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v3.5.3
+        with:
+          submodules: recursive
+      - run: mkdir -p /tmp/results
+        shell: bash
+      - name: build release version
+        shell: bash
+        run: |
+          # PGOは効果ない
+          $CMAKE_COMMAND -DCMAKE_BUILD_TYPE=Release -DSANDYBRIDGE_SUPPORT=ON .
+          ls -la
+          bash -c "$MAKE_COMMAND"
+
+          cp -R bin /tmp/results/bin
+          cp -R CMakeFiles /tmp/results/CMakeFiles
+      - run: git clone --single-branch --depth 1 -b master https://github.com/ai-mastering/bakuage_dataset1.git /tmp/bakuage_dataset1
+        shell: bash
+      - name: create sound_quality2_cache for prod
+        shell: bash
+        run: |
+          bin/audio_analyzer --mode=sound_quality2_preparation --analysis_data_dir=/tmp/bakuage_dataset1/analysis_shortpath --sound_quality2_cache=/tmp/results/sound_quality2_cache
+          cp /tmp/results/sound_quality2_cache resource/sound_quality2_cache
+      - name: create release tar
+        shell: bash
+        run: |
+          (
+            mv bin built
+            mv .circleci/executable_licenses ./
+            mkdir -p /tmp/phaselimiter_build
+            cp -r . /tmp/phaselimiter_build/phaselimiter
+            cd /tmp/phaselimiter_build
+            tar -Jcf /tmp/results/release.tar.xz -T phaselimiter/.circleci/release_files.txt
+          )
+      - uses: actions/upload-artifact@v3
+        with:
+          name: build-results
+          path: /tmp/results
