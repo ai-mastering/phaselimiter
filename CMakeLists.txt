@@ -71,10 +71,10 @@ if(WIN32)
     set(BAKUAGE_PREBUILT_DIR ${PROJECT_SOURCE_DIR}/prebuilt/win64)
     set(BAKUAGE_LIB_DIR ${BAKUAGE_PREBUILT_DIR}/lib)
     include_directories(
-      prebuilt/win64/libsndfile-1.2.2-win64/include
+      ${PROJECT_SOURCE_DIR}/prebuilt/win64/libsndfile-1.2.2-win64/include
     )
     link_directories(
-      prebuilt/win64/libsndfile-1.2.2-win64/lib
+      ${PROJECT_SOURCE_DIR}/prebuilt/win64/libsndfile-1.2.2-win64/lib
     )
     set(Boost_ARCHITECTURE "-x64")
   elseif(CMAKE_SIZEOF_VOID_P EQUAL 4)
@@ -110,6 +110,7 @@ if(WIN32)
   	${BAKUAGE_PREBUILT_DIR}/include
     ${CONDA_ROOT}/include
     ${CONDA_ROOT}/Library/include
+    ${PROJECT_SOURCE_DIR}/header_only_version
   )
   set(TINY_PROCESS_SOURCES
     deps/tiny-process-library/process.hpp
