@@ -68,18 +68,25 @@ if(WIN32)
   if(CMAKE_SIZEOF_VOID_P EQUAL 8)
     set(BAKUAGE_PREBUILT_DIR ${PROJECT_SOURCE_DIR}/prebuilt/win64)
     set(BAKUAGE_LIB_DIR ${BAKUAGE_PREBUILT_DIR}/lib)
-    set(BAKUAGE_BOOST_LIB_DIR C:/pfiles2/boost_1_63_0/stage/x64/lib)
     include_directories(
       prebuilt/win64/libsndfile-1.2.2-win64/include
     )
     link_directories(
       prebuilt/win64/libsndfile-1.2.2-win64/lib
     )
+    set(Boost_ARCHITECTURE "-x64")
   elseif(CMAKE_SIZEOF_VOID_P EQUAL 4)
     set(BAKUAGE_PREBUILT_DIR ${PROJECT_SOURCE_DIR}/prebuilt/win32)
     set(BAKUAGE_LIB_DIR ${BAKUAGE_PREBUILT_DIR}/lib/release)
-    set(BAKUAGE_BOOST_LIB_DIR C:/pfiles2/boost_1_63_0/stage/x86/lib)
   endif()
+
+  set(Boost_USE_STATIC_LIBS ON)
+  set(Boost_USE_MULTITHREADED ON)
+  set(Boost_USE_STATIC_RUNTIME ON)
+  # set(Boost_COMPILER "-vc142")
+  set(Boost_DEBUG OFF)
+  find_package(Boost REQUIRED system filesystem serialization math_tr1 iostreams)
+
   set(BAKUAGE_LINK_LIBRARIES
     # ${BAKUAGE_LIB_DIR}/libfftw3-3.lib
     # ${BAKUAGE_LIB_DIR}/libfftw3f-3.lib
@@ -91,26 +98,16 @@ if(WIN32)
     ippsmt.lib
     ippcoremt.lib
     ippvmmt.lib
+    ${Boost_LIBRARIES}
   )
   link_directories(
-    ${BAKUAGE_BOOST_LIB_DIR}
+    ${Boost_LIBRARY_DIRS}
+  	${IPPROOT}/lib
   )
-  if(CMAKE_SIZEOF_VOID_P EQUAL 8)
-    link_directories(
-      "C:/Program Files (x86)/IntelSWTools/compilers_and_libraries/windows/ipp/lib/intel64"
-      "C:/Program Files (x86)/IntelSWTools/compilers_and_libraries/windows/tbb/lib/intel64/vc14"
-    )
-  elseif(CMAKE_SIZEOF_VOID_P EQUAL 4)
-    link_directories(
-      "C:/Program Files (x86)/IntelSWTools/compilers_and_libraries/windows/ipp/lib/ia32"
-      "C:/Program Files (x86)/IntelSWTools/compilers_and_libraries/windows/tbb/lib/ia32/vc14"
-    )
-  endif()
   include_directories(
   	${BAKUAGE_PREBUILT_DIR}/include
-  	C:/pfiles2/boost_1_63_0
-  	"C:/Program Files (x86)/IntelSWTools/compilers_and_libraries/windows/ipp/include"
-  	"C:/Program Files (x86)/IntelSWTools/compilers_and_libraries/windows/tbb/include"
+  	${Boost_INCLUDE_DIRS}
+  	${IPPROOT}/include
   )
   set(TINY_PROCESS_SOURCES
     deps/tiny-process-library/process.hpp
