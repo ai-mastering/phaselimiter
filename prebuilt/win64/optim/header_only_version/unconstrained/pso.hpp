@@ -79,7 +79,7 @@ pso_int(arma::vec& init_out_vals, std::function<double (const arma::vec& vals_in
     const arma::vec par_initial_ub = (settings.pso_initial_ub.n_elem == n_vals) ? settings.pso_initial_ub : init_out_vals + 0.5;
 
     const bool vals_bound = settings.vals_bound;
-    
+
     const arma::vec lower_bounds = settings.lower_bounds;
     const arma::vec upper_bounds = settings.upper_bounds;
 
@@ -89,12 +89,12 @@ pso_int(arma::vec& init_out_vals, std::function<double (const arma::vec& vals_in
 
     std::function<double (const arma::vec& vals_inp, arma::vec* grad_out, void* box_data)> box_objfn \
     = [opt_objfn, vals_bound, bounds_type, lower_bounds, upper_bounds] (const arma::vec& vals_inp, arma::vec* grad_out, void* opt_data) \
-    -> double 
+    -> double
     {
         if (vals_bound)
         {
             arma::vec vals_inv_trans = inv_transform(vals_inp, bounds_type, lower_bounds, upper_bounds);
-            
+
             return opt_objfn(vals_inv_trans,nullptr,opt_data);
         }
         else
@@ -109,10 +109,14 @@ pso_int(arma::vec& init_out_vals, std::function<double (const arma::vec& vals_in
     arma::vec objfn_vals(n_pop);
     arma::mat P(n_pop,n_vals);
 
+#ifdef OPTIM_USE_TBB
+    tbb::parallel_for<size_t>(0, n_pop, [&](size_t i)
+#else
 #ifdef OPTIM_USE_OMP
     #pragma omp parallel for
 #endif
-    for (size_t i=0; i < n_pop; i++) 
+    for (size_t i=0; i < n_pop; i++)
+#endif
     {
         if (center_particle && i == n_pop - 1) {
             P.row(i) = arma::sum(P.rows(0,n_pop-2),0) / static_cast<double>(n_pop-1); // center vector
@@ -125,13 +129,16 @@ pso_int(arma::vec& init_out_vals, std::function<double (const arma::vec& vals_in
         if (!std::isfinite(prop_objfn_val)) {
             prop_objfn_val = inf;
         }
-        
+
         objfn_vals(i) = prop_objfn_val;
 
         if (vals_bound) {
             P.row(i) = arma::trans( transform(P.row(i).t(), bounds_type, lower_bounds, upper_bounds) );
         }
     }
+#ifdef OPTIM_USE_TBB
+    );
+#endif
 
     arma::vec best_vals = objfn_vals;
     arma::mat best_vecs = P;
@@ -151,7 +158,7 @@ pso_int(arma::vec& init_out_vals, std::function<double (const arma::vec& vals_in
     while (err > err_tol && iter < n_gen)
     {
         iter++;
-        
+
         //
         // parameter updating
 
@@ -170,10 +177,14 @@ pso_int(arma::vec& init_out_vals, std::function<double (const arma::vec& vals_in
         //
         // population loop
 
+#ifdef OPTIM_USE_TBB
+        tbb::parallel_for<size_t>(0, n_pop, [&](size_t i)
+#else
 #ifdef OPTIM_USE_OMP
-        #pragma omp parallel for 
+        #pragma omp parallel for
 #endif
         for (size_t i=0; i < n_pop; i++)
+#endif
         {
             if ( !(center_particle && i == n_pop - 1) )
             {
@@ -185,7 +196,7 @@ pso_int(arma::vec& init_out_vals, std::function<double (const arma::vec& vals_in
             {
                 P.row(i) = arma::sum(P.rows(0,n_pop-2),0) / static_cast<double>(n_pop-1); // center vector
             }
-            
+
             //
 
             double prop_objfn_val = box_objfn(P.row(i).t(),nullptr,opt_data);
@@ -193,15 +204,18 @@ pso_int(arma::vec& init_out_vals, std::function<double (const arma::vec& vals_in
             if (!std::isfinite(prop_objfn_val)) {
                 prop_objfn_val = inf;
             }
-        
+
             objfn_vals(i) = prop_objfn_val;
-                
+
             if (objfn_vals(i) < best_vals(i))
             {
                 best_vals(i) = objfn_vals(i);
                 best_vecs.row(i) = P.row(i);
             }
         }
+#ifdef OPTIM_USE_TBB
+        );
+#endif
 
         uint_t min_objfn_val_index = best_vals.index_min();
         double min_objfn_val = best_vals(min_objfn_val_index);
@@ -212,10 +226,10 @@ pso_int(arma::vec& init_out_vals, std::function<double (const arma::vec& vals_in
             global_best_vec = best_vecs.row( min_objfn_val_index );
         }
 
-        if (iter%check_freq == 0) 
-        {   
+        if (iter%check_freq == 0)
+        {
             err = std::abs(global_best_val - global_best_val_check) / (1.0 + std::abs(global_best_val));
-            
+
             if (global_best_val < global_best_val_check) {
                 global_best_val_check = global_best_val;
             }

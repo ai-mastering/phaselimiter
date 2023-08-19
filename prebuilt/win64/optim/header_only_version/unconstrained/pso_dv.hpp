@@ -69,7 +69,7 @@ pso_dv_int(arma::vec& init_out_vals, std::function<double (const arma::vec& vals
     const arma::vec par_initial_ub = (settings.pso_initial_ub.n_elem == n_vals) ? settings.pso_initial_ub : init_out_vals + 0.5;
 
     const bool vals_bound = settings.vals_bound;
-    
+
     const arma::vec lower_bounds = settings.lower_bounds;
     const arma::vec upper_bounds = settings.upper_bounds;
 
@@ -80,12 +80,12 @@ pso_dv_int(arma::vec& init_out_vals, std::function<double (const arma::vec& vals
 
     std::function<double (const arma::vec& vals_inp, arma::vec* grad_out, void* box_data)> box_objfn \
     = [opt_objfn, vals_bound, bounds_type, lower_bounds, upper_bounds] (const arma::vec& vals_inp, arma::vec* grad_out, void* opt_data) \
-    -> double 
+    -> double
     {
         if (vals_bound)
         {
             arma::vec vals_inv_trans = inv_transform(vals_inp, bounds_type, lower_bounds, upper_bounds);
-            
+
             return opt_objfn(vals_inv_trans,nullptr,opt_data);
         }
         else
@@ -100,10 +100,14 @@ pso_dv_int(arma::vec& init_out_vals, std::function<double (const arma::vec& vals
     arma::vec objfn_vals(n_pop);
     arma::mat P(n_pop,n_vals);
 
+#ifdef OPTIM_USE_TBB
+    tbb::parallel_for<size_t>(0, n_pop, [&](size_t i)
+#else
 #ifdef OPTIM_USE_OMP
     #pragma omp parallel for
 #endif
-    for (size_t i=0; i < n_pop; i++) 
+    for (size_t i=0; i < n_pop; i++)
+#endif
     {
         P.row(i) = par_initial_lb.t() + (par_initial_ub.t() - par_initial_lb.t())%arma::randu(1,n_vals);
 
@@ -112,13 +116,16 @@ pso_dv_int(arma::vec& init_out_vals, std::function<double (const arma::vec& vals
         if (std::isnan(prop_objfn_val)) {
             prop_objfn_val = inf;
         }
-        
+
         objfn_vals(i) = prop_objfn_val;
 
         if (vals_bound) {
             P.row(i) = arma::trans( transform(P.row(i).t(), bounds_type, lower_bounds, upper_bounds) );
         }
     }
+#ifdef OPTIM_USE_TBB
+    );
+#endif
 
     arma::vec best_vals = objfn_vals;
 
@@ -143,10 +150,14 @@ pso_dv_int(arma::vec& init_out_vals, std::function<double (const arma::vec& vals
         arma::rowvec P_max = arma::max(P);
         arma::rowvec P_min = arma::min(P);
 
+#ifdef OPTIM_USE_TBB
+        tbb::parallel_for<size_t>(0, n_pop, [&](size_t i)
+#else
 #ifdef OPTIM_USE_OMP
-        #pragma omp parallel for 
+        #pragma omp parallel for
 #endif
         for (size_t i=0; i < n_pop; i++)
+#endif
         {
             uint_t c_1, c_2;
 
@@ -164,9 +175,9 @@ pso_dv_int(arma::vec& init_out_vals, std::function<double (const arma::vec& vals
 
             arma::rowvec delta_vec = P.row(c_1) - P.row(c_2);
 
-            for (size_t k=0; k < n_vals; k++) 
+            for (size_t k=0; k < n_vals; k++)
             {
-                if (rand_CR(k) <= par_CR) 
+                if (rand_CR(k) <= par_CR)
                 {
                     double rand_u = arma::as_scalar(arma::randu(1));
 
@@ -187,21 +198,24 @@ pso_dv_int(arma::vec& init_out_vals, std::function<double (const arma::vec& vals
                 stag_vec(i) += 1;
             }
 
-            if (stag_vec(i) >= stag_limit) 
+            if (stag_vec(i) >= stag_limit)
             {
                 P.row(i) = P_min + arma::randu(1,n_vals) % (P_max - P_min);
                 stag_vec(i) = 0;
 
                 objfn_vals(i) = box_objfn(P.row(i).t(),nullptr,opt_data);
             }
-                
+
             // if (objfn_vals(i) < best_vals(i)) {
             //     best_vals(i) = objfn_vals(i);
             //     best_vecs.row(i) = P.row(i);
             // }
         }
+#ifdef OPTIM_USE_TBB
+        );
+#endif
 
-        if (objfn_vals.min() < global_best_val) 
+        if (objfn_vals.min() < global_best_val)
         {
             global_best_val = objfn_vals.min();
             global_best_vec = P.row( objfn_vals.index_min() );
@@ -220,7 +234,7 @@ pso_dv_int(arma::vec& init_out_vals, std::function<double (const arma::vec& vals
     error_reporting(init_out_vals,global_best_vec.t(),opt_objfn,opt_data,success,err,err_tol,iter,n_gen,conv_failure_switch,settings_inp);
 
     //
-    
+
     return true;
 }
 

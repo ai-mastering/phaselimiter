@@ -50,7 +50,7 @@ nm_int(arma::vec& init_out_vals, std::function<double (const arma::vec& vals_inp
     }
 
     int verbose_print_level = settings.verbose_print_level;
-    
+
     const uint_t conv_failure_switch = settings.conv_failure_switch;
     const uint_t iter_max = settings.iter_max;
     const double err_tol = settings.err_tol;
@@ -62,7 +62,7 @@ nm_int(arma::vec& init_out_vals, std::function<double (const arma::vec& vals_inp
     const double par_delta = (settings.nm_adaptive) ? 1.0 - 1.0 / n_vals        : settings.nm_par_delta;
 
     const bool vals_bound = settings.vals_bound;
-    
+
     const arma::vec lower_bounds = settings.lower_bounds;
     const arma::vec upper_bounds = settings.upper_bounds;
 
@@ -72,12 +72,12 @@ nm_int(arma::vec& init_out_vals, std::function<double (const arma::vec& vals_inp
 
     std::function<double (const arma::vec& vals_inp, arma::vec* grad_out, void* box_data)> box_objfn \
     = [opt_objfn, vals_bound, bounds_type, lower_bounds, upper_bounds] (const arma::vec& vals_inp, arma::vec* grad_out, void* opt_data) \
-    -> double 
+    -> double
     {
         if (vals_bound)
         {
             arma::vec vals_inv_trans = inv_transform(vals_inp, bounds_type, lower_bounds, upper_bounds);
-            
+
             return opt_objfn(vals_inv_trans,nullptr,opt_data);
         }
         else
@@ -85,13 +85,13 @@ nm_int(arma::vec& init_out_vals, std::function<double (const arma::vec& vals_inp
             return opt_objfn(vals_inp,nullptr,opt_data);
         }
     };
-    
+
     //
     // setup
 
     arma::vec simplex_fn_vals(n_vals+1);
     arma::mat simplex_points(n_vals+1,n_vals);
-    
+
     simplex_fn_vals(0) = opt_objfn(init_out_vals,nullptr,opt_data);
     simplex_points.row(0) = init_out_vals.t();
 
@@ -100,7 +100,7 @@ nm_int(arma::vec& init_out_vals, std::function<double (const arma::vec& vals_inp
     //     simplex_fn_vals(i) = opt_objfn(simplex_points.row(i).t(),nullptr,opt_data);
     // }
 
-    for (size_t i=1; i < n_vals + 1; i++) 
+    for (size_t i=1; i < n_vals + 1; i++)
     {
         if (init_out_vals(i-1) != 0.0) {
             simplex_points.row(i) = init_out_vals.t() + 0.05*init_out_vals(i-1)*arma::trans(unit_vec(i-1,n_vals));
@@ -140,7 +140,7 @@ nm_int(arma::vec& init_out_vals, std::function<double (const arma::vec& vals_inp
     {
         iter++;
         bool next_iter = false;
-        
+
         // step 1
 
         arma::uvec sort_vec = arma::sort_index(simplex_fn_vals); // sort from low (best) to high (worst) values
@@ -156,7 +156,7 @@ nm_int(arma::vec& init_out_vals, std::function<double (const arma::vec& vals_inp
 
         double f_r = box_objfn(x_r,nullptr,opt_data);
 
-        if (f_r >= simplex_fn_vals(0) && f_r < simplex_fn_vals(n_vals-1)) 
+        if (f_r >= simplex_fn_vals(0) && f_r < simplex_fn_vals(n_vals-1))
         {   // reflected point is neither best nor worst in the new simplex
             simplex_points.row(n_vals) = x_r.t();
             next_iter = true;
@@ -164,7 +164,7 @@ nm_int(arma::vec& init_out_vals, std::function<double (const arma::vec& vals_inp
 
         // step 3
 
-        if (!next_iter && f_r < simplex_fn_vals(0)) 
+        if (!next_iter && f_r < simplex_fn_vals(0))
         {   // reflected point is better than the current best; try to go farther along this direction
             arma::vec x_e = centroid + par_gamma*(x_r - centroid);
 
@@ -181,12 +181,12 @@ nm_int(arma::vec& init_out_vals, std::function<double (const arma::vec& vals_inp
 
         // steps 4, 5, 6
 
-        if (!next_iter && f_r >= simplex_fn_vals(n_vals-1)) 
+        if (!next_iter && f_r >= simplex_fn_vals(n_vals-1))
         {   // reflected point is still worse than x_n; contract
 
             // steps 4 and 5
 
-            if (f_r < simplex_fn_vals(n_vals)) 
+            if (f_r < simplex_fn_vals(n_vals))
             {   // outside contraction
                 arma::vec x_oc = centroid + par_beta*(x_r - centroid);
 
@@ -197,10 +197,10 @@ nm_int(arma::vec& init_out_vals, std::function<double (const arma::vec& vals_inp
                     simplex_points.row(n_vals) = x_oc.t();
                     next_iter = true;
                 }
-            } 
-            else 
+            }
+            else
             {   // inside contraction: f_r >= simplex_fn_vals(n_vals)
-                
+
                 // x_ic = centroid - par_beta*(x_r - centroid);
                 arma::vec x_ic = centroid + par_beta*(simplex_points.row(n_vals).t() - centroid);
 
@@ -216,7 +216,7 @@ nm_int(arma::vec& init_out_vals, std::function<double (const arma::vec& vals_inp
 
         // step 6
 
-        if (!next_iter) 
+        if (!next_iter)
         {   // neither outside nor inside contraction was acceptable; shrink the simplex toward x(0)
             for (size_t i=1; i < n_vals + 1; i++) {
                 simplex_points.row(i) = simplex_points.row(0) + par_delta*(simplex_points.row(i) - simplex_points.row(0));
@@ -224,15 +224,21 @@ nm_int(arma::vec& init_out_vals, std::function<double (const arma::vec& vals_inp
         }
 
         // check change in fn_val
+#ifdef OPTIM_USE_TBB
+       tbb::parallel_for<size_t>(0, n_vals + 1, [&](size_t i) {
+#else
 #ifdef OPTIM_USE_OMP
         #pragma omp parallel for
 #endif
         for (size_t i=0; i < n_vals + 1; i++) {
+#endif
             simplex_fn_vals(i) = box_objfn(simplex_points.row(i).t(),nullptr,opt_data);
         }
-
+#ifdef OPTIM_USE_TBB
+        );
+#endif
         //
-    
+
         err = std::abs(min_val - simplex_fn_vals.max());
         min_val = simplex_fn_vals.min();
 
@@ -267,7 +273,7 @@ nm_int(arma::vec& init_out_vals, std::function<double (const arma::vec& vals_inp
     //
 
     arma::vec prop_out = simplex_points.row(index_min(simplex_fn_vals)).t();
-    
+
     if (vals_bound) {
         prop_out = inv_transform(prop_out, bounds_type, lower_bounds, upper_bounds);
     }
@@ -275,7 +281,7 @@ nm_int(arma::vec& init_out_vals, std::function<double (const arma::vec& vals_inp
     error_reporting(init_out_vals,prop_out,opt_objfn,opt_data,success,err,err_tol,iter,iter_max,conv_failure_switch,settings_inp);
 
     //
-    
+
     return success;
 }
 

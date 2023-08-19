@@ -21,6 +21,9 @@
 #ifndef OPTIMLIB_INCLUDES
 #define OPTIMLIB_INCLUDES
 
+#ifdef OPTIM_USE_TBB
+#include <tbb/tbb.h>
+#endif
 #include "misc/optim_options.hpp"
 
 namespace optim

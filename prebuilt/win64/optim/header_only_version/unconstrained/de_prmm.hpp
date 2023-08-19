@@ -79,7 +79,7 @@ de_prmm_int(arma::vec& init_out_vals, std::function<double (const arma::vec& val
     size_t n_gen = std::ceil(max_fn_eval / (pmax*n_pop));
 
     const bool vals_bound = settings.vals_bound;
-    
+
     const arma::vec lower_bounds = settings.lower_bounds;
     const arma::vec upper_bounds = settings.upper_bounds;
 
@@ -89,12 +89,12 @@ de_prmm_int(arma::vec& init_out_vals, std::function<double (const arma::vec& val
 
     std::function<double (const arma::vec& vals_inp, arma::vec* grad_out, void* box_data)> box_objfn \
     = [opt_objfn, vals_bound, bounds_type, lower_bounds, upper_bounds] (const arma::vec& vals_inp, arma::vec* grad_out, void* opt_data) \
-    -> double 
+    -> double
     {
         if (vals_bound)
         {
             arma::vec vals_inv_trans = inv_transform(vals_inp, bounds_type, lower_bounds, upper_bounds);
-            
+
             return opt_objfn(vals_inv_trans,nullptr,opt_data);
         }
         else
@@ -109,10 +109,14 @@ de_prmm_int(arma::vec& init_out_vals, std::function<double (const arma::vec& val
     arma::vec objfn_vals(n_pop);
     arma::mat X(n_pop,n_vals), X_next(n_pop,n_vals);
 
+#ifdef OPTIM_USE_TBB
+    tbb::parallel_for<size_t>(0, n_pop, [&](size_t i)
+#else
 #ifdef OPTIM_USE_OMP
     #pragma omp parallel for
 #endif
-    for (size_t i=0; i < n_pop; i++) 
+    for (size_t i=0; i < n_pop; i++)
+#endif
     {
         X_next.row(i) = par_initial_lb.t() + (par_initial_ub.t() - par_initial_lb.t())%arma::randu(1,n_vals);
 
@@ -121,13 +125,16 @@ de_prmm_int(arma::vec& init_out_vals, std::function<double (const arma::vec& val
         if (!std::isfinite(prop_objfn_val)) {
             prop_objfn_val = inf;
         }
-        
+
         objfn_vals(i) = prop_objfn_val;
 
         if (vals_bound) {
             X_next.row(i) = arma::trans( transform(X_next.row(i).t(), bounds_type, lower_bounds, upper_bounds) );
         }
     }
+#ifdef OPTIM_USE_TBB
+    );
+#endif
 
     double best_objfn_val_running = objfn_vals.min();
     // double best_objfn_val_check   = best_objfn_val_running;
@@ -161,12 +168,16 @@ de_prmm_int(arma::vec& init_out_vals, std::function<double (const arma::vec& val
             arma::vec objfn_vals_reset(n_pop_temp);
             arma::mat X_reset(n_pop_temp,n_vals);
 
+#ifdef OPTIM_USE_TBB
+            tbb::parallel_for<size_t>(0, n_pop_temp, [&](size_t j)
+#else
 #ifdef OPTIM_USE_OMP
             #pragma omp parallel for
 #endif
-            for (size_t j=0; j < n_pop_temp; j++) 
+            for (size_t j=0; j < n_pop_temp; j++)
+#endif
             {
-                if (objfn_vals(j) < objfn_vals(j + n_pop_temp)) 
+                if (objfn_vals(j) < objfn_vals(j + n_pop_temp))
                 {
                     X_reset.row(j) = X_next.row(j);
                     objfn_vals_reset(j) = objfn_vals(j);
@@ -177,6 +188,9 @@ de_prmm_int(arma::vec& init_out_vals, std::function<double (const arma::vec& val
                     objfn_vals_reset(j) = objfn_vals(j + n_pop_temp);
                 }
             }
+#ifdef OPTIM_USE_TBB
+            );
+#endif
 
             objfn_vals = objfn_vals_reset;
             X_next = X_reset;
@@ -190,15 +204,19 @@ de_prmm_int(arma::vec& init_out_vals, std::function<double (const arma::vec& val
 
         X = X_next;
 
-        //
-        // first population: n_pop - n_pop_best
-        
-
+#ifdef OPTIM_USE_TBB
+        tbb::parallel_for<size_t>(0, n_pop - n_pop_best, [&](size_t i)
+#else
 #ifdef OPTIM_USE_OMP
         #pragma omp parallel for
 #endif
-        for (size_t i=0; i < n_pop - n_pop_best; i++)
+        for (size_t i=0; i < n_pop; i++)
+#endif
         {
+        if (i < n_pop - n_pop_best) {
+            //
+            // first population: n_pop - n_pop_best
+
             arma::vec rand_pars = arma::randu(4);
 
             if (rand_pars(0) < tau_F) {
@@ -253,7 +271,7 @@ de_prmm_int(arma::vec& init_out_vals, std::function<double (const arma::vec& val
             //
 
             double prop_objfn_val = box_objfn(X_prop.t(),nullptr,opt_data);
-            
+
             if (prop_objfn_val <= objfn_vals(i))
             {
                 X_next.row(i) = X_prop;
@@ -264,19 +282,10 @@ de_prmm_int(arma::vec& init_out_vals, std::function<double (const arma::vec& val
                 X_next.row(i) = X.row(i);
             }
         }
+        else {
+            //
+            // second population
 
-        best_val_main = objfn_vals.rows(0,n_pop - n_pop_best - 1).min();
-        best_vec_main = X_next.rows(0,n_pop - n_pop_best - 1).row( objfn_vals.rows(0,n_pop - n_pop_best - 1).index_min() );
-
-        if (best_val_main < best_val_best) {
-            xchg_vec = best_vec_main;
-        }
-
-        //
-        // second population
-
-        for (size_t i = n_pop - n_pop_best; i < n_pop; i++)
-        {
             arma::vec rand_pars = arma::randu(4);
 
             if (rand_pars(0) < tau_F) {
@@ -317,7 +326,7 @@ de_prmm_int(arma::vec& init_out_vals, std::function<double (const arma::vec& val
             //
 
             double prop_objfn_val = box_objfn(X_prop.t(),nullptr,opt_data);
-            
+
             if (prop_objfn_val <= objfn_vals(i))
             {
                 X_next.row(i) = X_prop;
@@ -328,6 +337,17 @@ de_prmm_int(arma::vec& init_out_vals, std::function<double (const arma::vec& val
                 X_next.row(i) = X.row(i);
             }
         }
+        }
+#ifdef OPTIM_USE_TBB
+        );
+#endif
+
+        best_val_main = objfn_vals.rows(0,n_pop - n_pop_best - 1).min();
+        best_vec_main = X_next.rows(0,n_pop - n_pop_best - 1).row( objfn_vals.rows(0,n_pop - n_pop_best - 1).index_min() );
+
+        if (best_val_main < best_val_best) {
+            xchg_vec = best_vec_main;
+        }
 
         best_val_best = objfn_vals.rows(n_pop - n_pop_best, n_pop - 1).min();
         best_vec_best = X_next.rows(n_pop - n_pop_best, n_pop - 1).row( objfn_vals.rows(n_pop - n_pop_best, n_pop - 1).index_min() );
@@ -336,7 +356,7 @@ de_prmm_int(arma::vec& init_out_vals, std::function<double (const arma::vec& val
         {
             double the_sum = 0;
 
-            for (size_t j=0; j < n_vals; j++) 
+            for (size_t j=0; j < n_vals; j++)
             {
                 double min_val = X.col(j).min();
 
