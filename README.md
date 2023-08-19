@@ -57,10 +57,6 @@ dynamic link (reason)
 - libpng: probably included in VS redistributable
 - libz: probably included in VS redistributable
 
-- liblapack # require for armadillo
-- libblas # required for armadillo
-- libarmadillo.so # only shared library available in apt
-
 static link
 
 - libboost_system
@@ -72,7 +68,6 @@ static link
 - ippsmt.lib
 - ippcoremt.lib
 - ippvmmt.lib
-- libbenchmark
 
 libgflags.a
 

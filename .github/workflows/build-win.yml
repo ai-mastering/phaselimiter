@@ -22,7 +22,7 @@ jobs:
         shell: bash
         run: |
           # PGOは効果ない
-          $CMAKE_COMMAND -DCMAKE_BUILD_TYPE=Release -DSANDYBRIDGE_SUPPORT=ON .
+          $CMAKE_COMMAND -DCMAKE_BUILD_TYPE=Release -DSANDYBRIDGE_SUPPORT=ON -DDISABLE_BENCH=ON .
           ls -la
           bash -c "$MAKE_COMMAND"
 
