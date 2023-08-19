@@ -219,6 +219,7 @@ else()
 endif()
 
 add_subdirectory(deps/googletest)
+set(GFLAGS_BUILD_gflags_LIB ON)
 add_subdirectory(deps/gflags)
 
 if(WIN32)
