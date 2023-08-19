@@ -27,7 +27,7 @@ jobs:
           conda install -y -c intel \
             tbb-devel==2021.10.0 \
             ipp-devel==2021.9.0
-        shell: bash
+        shell: bash -el {0}
       - run: mkdir -p /tmp/results
         shell: bash
       - name: build release version
