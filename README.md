@@ -46,14 +46,12 @@ see .circleci/config.yml
 
 #### windows build
 
-- store prebuilt lib and dll at prebuilt/win64, prebuilt/win32
-
 dynamic link (reason)
 
 - libtbb: shared library is recommended officially
 - libtbbmalloc
 - libtbbmalloc_proxy
-- libsndfile: LGPL
+- libsndfile: LGPL, stored in prebuilt
 - libpng: probably included in VS redistributable
 - libz: probably included in VS redistributable
 
@@ -68,10 +66,3 @@ static link
 - ippsmt.lib
 - ippcoremt.lib
 - ippvmmt.lib
-
-libgflags.a
-
-
-
-
-pthread

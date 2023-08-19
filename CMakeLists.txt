@@ -69,6 +69,12 @@ if(WIN32)
     set(BAKUAGE_PREBUILT_DIR ${PROJECT_SOURCE_DIR}/prebuilt/win64)
     set(BAKUAGE_LIB_DIR ${BAKUAGE_PREBUILT_DIR}/lib)
     set(BAKUAGE_BOOST_LIB_DIR C:/pfiles2/boost_1_63_0/stage/x64/lib)
+    include_directories(
+      prebuilt/win64/libsndfile-1.2.2-win64/include
+    )
+    link_directories(
+      prebuilt/win64/libsndfile-1.2.2-win64/lib
+    )
   elseif(CMAKE_SIZEOF_VOID_P EQUAL 4)
     set(BAKUAGE_PREBUILT_DIR ${PROJECT_SOURCE_DIR}/prebuilt/win32)
     set(BAKUAGE_LIB_DIR ${BAKUAGE_PREBUILT_DIR}/lib/release)
@@ -78,7 +84,7 @@ if(WIN32)
     # ${BAKUAGE_LIB_DIR}/libfftw3-3.lib
     # ${BAKUAGE_LIB_DIR}/libfftw3f-3.lib
     # ${BAKUAGE_LIB_DIR}/libFLAC_dynamic.lib
-    ${BAKUAGE_LIB_DIR}/libsndfile-1.lib
+    sndfile.lib
     # ${BAKUAGE_LIB_DIR}/gflags_static.lib
     shlwapi.lib
     ippimt.lib
