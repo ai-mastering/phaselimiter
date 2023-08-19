@@ -41,7 +41,7 @@ namespace {
         target_mean_(original_mean + wet_gain),
         threshold_(original_mean + relative_threshold),
         dry_gain_(wet_gain + relative_dry_gain), inv_ratio_(1.0 / ratio) {}
-        
+
         Float operator () (Float x) const {
             static const float log10_div_20 = std::log(10) / 20;
             Float w = std::max(threshold_, x);
@@ -50,7 +50,7 @@ namespace {
             Float z = x + dry_gain_;
             return 20 * std::log10(1e-37 + 0.5 * std::exp(log10_div_20 * y) + 0.5 * std::exp(log10_div_20 * z));
         }
-        
+
         Float threshold() const { return threshold_; }
     private:
         Float original_mean_;
@@ -60,14 +60,14 @@ namespace {
         Float inv_ratio_;
     };
     typedef MsCompressorFilter<Float, LoudnessMapping, LoudnessMapping> Compressor;
-    
+
     typedef arma::vec EffectParams;
-    
+
     struct BandEffect {
         LoudnessMapping loudness_mapping;
         LoudnessMapping ms_loudness_mapping;
     };
-    
+
     // 空間は重要。最適化のしやすさに関わる (あきらかに同じ値を返すような点が複数あると効率が悪い)
     // param変換。param in [a, b]。0で恒等変換になるようにする
     // 両側に均等なものはparam in [-1, 1]だが、そうでないものは[0, 1]とかもありえる
@@ -83,7 +83,7 @@ namespace {
     Float ToRatio(Float x) {
         return std::pow(5, x);
     }
-    
+
     // すべてゼロで恒等変換になるようにする
     struct Effect {
         Effect(const Eigen::VectorXd &original_mean, const EffectParams& params) {
@@ -96,11 +96,11 @@ namespace {
         }
         std::vector<BandEffect> band_effects;
     };
-    
+
 }
 
 namespace phase_limiter {
-    
+
     // audio_analyzer(CalculateMultibandLoudness2)の仕様に合わせて、mean, covを計算する。
     // エフェクトはloudness vector上でシミュレーションする
     // 基準ラウドネスの違いとかはホワイトノイズを処理して補正値を計算して補正する
@@ -108,7 +108,7 @@ namespace phase_limiter {
         const int frames = _wave->size() / 2;
         const int channels = 2;
         const float block_sec = 0.4;
-        
+
         // initialize sound quality calculator
         bakuage::SoundQuality2Calculator calculator;
         {
@@ -118,7 +118,7 @@ namespace phase_limiter {
         }
         const auto band_count = calculator.band_count();
         const auto bands = calculator.bands();
-        
+
         // initialize reference
         bakuage::MasteringReference2 mastering_reference;
         if (!FLAGS_mastering5_mastering_reference_file.empty()) {
@@ -127,7 +127,7 @@ namespace phase_limiter {
             bakuage::SoundQuality2CalculatorUnit::ParseReference(bakuage::LoadStrFromFile(FLAGS_mastering5_mastering_reference_file.c_str()).c_str(), &mean, &cov);
             mastering_reference = bakuage::MasteringReference2(mean, cov);
         }
-        
+
         // calculate original band loudness vectors
         std::vector<bakuage::AlignedPodVector<float>> band_loudnesses;
         {
@@ -136,7 +136,7 @@ namespace phase_limiter {
             const int width = bakuage::CeilInt<int>(sample_freq * block_sec, 4);
             const int shift = width / 2; // 本当は75% overlapだけど、高速化のために50% overlap
             const int samples = frames;
-            
+
             bakuage::AlignedPodVector<Float> filtered(channels * samples);
             for (int i = 0; i < channels; i++) {
                 LoudnessFilter<float> filter(sample_freq);
@@ -145,13 +145,13 @@ namespace phase_limiter {
                     filtered[k] = filter.Clock((*_wave)[k]);
                 }
             }
-            
+
             const int spec_len = width / 2 + 1;
-            
+
             // FFTの正規化も行う (sqrt(hanning)窓)
             bakuage::AlignedPodVector<float> window(width);
             bakuage::CopyHanning(width, window.data(), 1.0 / std::sqrt(width));
-            
+
             // 規格では最後のブロックは使わないけど、
             // 使ったほうが実用的なので使う
             band_loudnesses.resize(bakuage::CeilInt(samples, shift) / shift);
@@ -159,16 +159,16 @@ namespace phase_limiter {
                 const int pos = pos_idx * shift;
                 bakuage::AlignedPodVector<float> band_loudness(2 * band_count);
                 int end = std::min<int>(pos + width, samples);
-                
+
                 auto &pool = bakuage::ThreadLocalDftPool<bakuage::RealDft<Float>>::GetThreadInstance();
                 const auto dft = pool.Get(width);
-                
+
                 bakuage::AlignedPodVector<float> fft_input(width);
                 std::vector<bakuage::AlignedPodVector<std::complex<float>>> fft_outputs(channels);
                 for (int ch = 0; ch < channels; ch++) {
                     fft_outputs[ch].resize(spec_len);
                 }
-                
+
                 // FFT
                 for (int ch = 0; ch < channels; ch++) {
                     for (int i = 0; i < width; i++) {
@@ -176,12 +176,12 @@ namespace phase_limiter {
                     }
                     dft->Forward(fft_input.data(), (float *)fft_outputs[ch].data(), pool.work());
                 }
-                
+
                 // binをbandに振り分けていく
                 for (int band_index = 0; band_index < band_count; band_index++) {
                     int low_bin_index = std::floor(width * bands[band_index].low_freq / sample_freq);
                     int high_bin_index = std::min<int>(std::floor(width * (bands[band_index].high_freq == 0 ? 0.5 : bands[band_index].high_freq / sample_freq)), spec_len);
-                    
+
                     // mid
                     double sum = 0;
                     for (int i = low_bin_index; i < high_bin_index; i++) {
@@ -197,50 +197,50 @@ namespace phase_limiter {
                     band_loudness[2 * band_index + 1] = 10 * std::log10(1e-7//1e-37
                                                                       + sum / (0.5 * width));
                 }
-                
+
                 band_loudnesses[pos_idx] = std::move(band_loudness);
             });
         }
         progress_callback(0.1);
-        
+
         // エフェクト補正値計算
         // ホワイトノイズに窓掛けFFTで上記処理をしたラウドネスと、
         // ホワイトノイズをコンプレッサーで解析したラウドネスを比較する
         // -> いったんなしで、差分を出力してみて大きいなら考える。
-        
+
         // エフェクト適用シミュレーション (ms compressor filter)
         const auto apply_effect = [](const Effect &effect, const Float *input, Float *output) {
             for (int i = 0; i < effect.band_effects.size(); i++) {
                 const auto &band_effect = effect.band_effects[i];
                 // static const float sqrt_0_5 = std::sqrt(0.5); // 元のMsCompressorFilterはmsにするときにこれをかけていた。誤差が問題になるなら考える
                 static const float log10_div_20 = std::log(10) / 20;
-                
+
                 Float input_m = input[2 * i + 0];
                 Float input_s = input[2 * i + 1];
                 Float rms_m = std::pow(10, 0.1 * input_m);
                 Float rms_s = std::pow(10, 0.1 * input_s);
-                
+
                 Float total_loudness = -0.691 + 10 * std::log10(rms_m + rms_s + 1e-37);
                 Float mapped_loudness = band_effect.loudness_mapping(total_loudness);
-                
+
                 Float mid_to_side_loudness = input_s - input_m;
                 Float side_gain = std::exp(log10_div_20 * (band_effect.ms_loudness_mapping(mid_to_side_loudness) - mid_to_side_loudness));
-                
+
                 Float total_loudness_with_side_gain = -0.691 + 10 * std::log10(rms_m + rms_s * bakuage::Sqr(side_gain) + 1e-37);
                 Float gain = std::exp(log10_div_20 * (mapped_loudness - total_loudness_with_side_gain));
-                
+
                 output[2 * i + 0] = 10 * std::log10(rms_m * bakuage::Sqr(gain));
                 output[2 * i + 1] = 10 * std::log10(rms_s * bakuage::Sqr(side_gain * gain));
             }
         };
-        
+
         // エフェクトパラメータからエフェクト適用後のmean, covと各バンドの平均誤差を計算する
         const auto calc_mean_cov = [apply_effect, band_count, &band_loudnesses](const Effect *effect, Eigen::VectorXd *mean_vec, Eigen::MatrixXd *cov, float *mse) {
             const auto relative_threshold_db = -20;
             mean_vec->resize(2 * band_count);
             cov->resize(2 * band_count, 2 * band_count);
             *mse = 0;
-            
+
             // apply effect
             bakuage::AlignedPodVector<float> applied(2 * band_count);
             std::vector<bakuage::AlignedPodVector<float>> loudness_blocks(2 * band_count);
@@ -259,12 +259,12 @@ namespace phase_limiter {
                 }
             }
             *mse /= band_loudnesses.size() * applied.size();
-            
+
             // calculate mean
             bakuage::AlignedPodVector<Float> thresholds(2 * band_count);
             for (int band_index = 0; band_index < 2 * band_count; band_index++) {
                 const auto &band_blocks = loudness_blocks[band_index];
-                
+
                 double threshold = -1e10;//-70;
                 for (int k = 0; k < 2; k++) {
                     Float count = 0;
@@ -274,7 +274,7 @@ namespace phase_limiter {
                         count += valid;
                         sum += valid ? z : 0;
                     }
-                    
+
                     double mean = sum / (1e-37 + count);
                     if (k == 0) {
                         threshold = mean + relative_threshold_db;
@@ -285,7 +285,7 @@ namespace phase_limiter {
                     }
                 }
             }
-            
+
             // calculate covariance
             for (int band_index1 = 0; band_index1 < 2 * band_count; band_index1++) {
                 for (int band_index2 = band_index1; band_index2 < 2 * band_count; band_index2++) {
@@ -293,10 +293,10 @@ namespace phase_limiter {
                     const Float mean2 = (*mean_vec)[band_index2];
                     const Float threshold1 = thresholds[band_index1];
                     const Float threshold2 = thresholds[band_index2];
-                    
+
                     const auto &band_blocks1 = loudness_blocks[band_index1];
                     const auto &band_blocks2 = loudness_blocks[band_index2];
-                    
+
                     Float v = 0;
                     Float c = 0;
                     for (int i = 0; i < band_blocks1.size(); i++) {
@@ -312,13 +312,13 @@ namespace phase_limiter {
                 }
             }
         };
-        
+
         // calculate original
         Eigen::VectorXd original_mean;
         Eigen::MatrixXd original_cov;
         float original_mse;
         calc_mean_cov(nullptr, &original_mean, &original_cov, &original_mse);
-        
+
         // define bound
         arma::vec lower_bounds(8 * band_count);
         arma::vec upper_bounds(8 * band_count);
@@ -345,7 +345,7 @@ namespace phase_limiter {
             lower_bounds *= scale;
             upper_bounds *= scale;
         }
-        
+
         // エフェクトパラメータから評価関数を計算する
         std::mutex eval_mtx;
         float min_eval = 1e100;
@@ -366,7 +366,7 @@ namespace phase_limiter {
             float mse;
             Effect effect(original_mean, params);
             calc_mean_cov(&effect, &mean, &cov, &mse);
-            
+
             const bakuage::MasteringReference2 target(mean, cov);
             float main_eval = 0;
             if (FLAGS_mastering5_mastering_reference_file.empty()) {
@@ -376,7 +376,7 @@ namespace phase_limiter {
             } else {
                 main_eval = calculator.CalculateDistance(mastering_reference, target);
             }
-            
+
             // 事前の実験でalphaをいろいろ変えて最適化してmseを見たところ
             // 最適解のところで sound_qualityの微分とmseの微分が一致していると仮定すると、
             // alpha = 0.02 / sqrt(mse)になった。
@@ -401,7 +401,7 @@ namespace phase_limiter {
             }
             return eval;
         };
-        
+
         // calc initial eval
         EffectParams zero_params(8 * band_count);
         for (int i = 0; i < zero_params.size(); i++) {
@@ -409,7 +409,7 @@ namespace phase_limiter {
         }
         const auto initial_eval = calc_eval(zero_params);
         std::cerr << "optimization initial_eval: " << initial_eval << std::endl;
-        
+
         // エフェクトパラメータ探索
         const auto find_params = [calc_eval, band_count, &zero_params, initial_eval, &lower_bounds, &upper_bounds]() {
             optim::algo_settings_t settings;
@@ -479,16 +479,16 @@ namespace phase_limiter {
                 return zero_params;
             }
         };
-        
+
         const auto effect_params = find_params();
         const Effect effect(original_mean, effect_params);
-        
+
         std::mutex result_mtx;
         std::mutex progression_mtx;
         std::vector<std::function<void ()>> tasks;
         std::vector<Float> result(_wave->size());
         bakuage::AlignedPodVector<Float> progressions(band_count);
-        
+
         const auto update_progression = [&progressions, &progression_mtx, progress_callback](int i, Float p) {
             std::lock_guard<std::mutex> lock(progression_mtx);
             Float total = 0;
@@ -498,14 +498,14 @@ namespace phase_limiter {
             }
             progress_callback(0.6 + 0.4 * total / progressions.size());
         };
-        
+
         for (int band_index = 0; band_index < band_count; band_index++) {
             const auto &band = calculator.bands()[band_index];
             const auto update_progression_bound = std::bind(update_progression, band_index, std::placeholders::_1);
             const auto &band_effect = effect.band_effects[band_index];
-            tasks.push_back([band, band_effect, sample_rate, frames, _wave, &result, &result_mtx, update_progression_bound]() {
+            tasks.push_back([band, band_effect, sample_rate, frames, _wave, &result, &result_mtx, update_progression_bound, channels]() {
                 const float *wave_ptr = &(*_wave)[0];
-                
+
                 int fir_delay_samples;
                 std::vector<Float> fir;
                 {
@@ -516,7 +516,7 @@ namespace phase_limiter {
                     fir = CalculateBandPassFir<Float>(freq1, freq2, n, 4);
                 }
                 update_progression_bound(0.1);
-                
+
                 const int len = frames + fir.size() - 1;
                 bakuage::AlignedPodVector<float> filtered(channels * len);
                 {
@@ -535,7 +535,7 @@ namespace phase_limiter {
                     }
                 }
                 update_progression_bound(0.2);
-                
+
                 Compressor::Config compressor_config;
                 compressor_config.loudness_mapping_func = band_effect.loudness_mapping;
                 compressor_config.ms_loudness_mapping_func = band_effect.ms_loudness_mapping;
@@ -543,13 +543,13 @@ namespace phase_limiter {
                 compressor_config.num_channels = channels;
                 compressor_config.sample_rate = sample_rate;
                 Compressor compressor(compressor_config);
-                
+
                 const int shift = compressor.delay_samples();
                 const int len2 = frames + shift;
                 filtered.resize(channels * len2);
                 bakuage::AlignedPodVector<Float> temp_input(channels);
                 bakuage::AlignedPodVector<Float> temp_output(channels);
-                
+
                 // filteredにin-placeで書き込んでから共有のresultに足しこむ
                 for (int j = 0; j < len2; j++) {
                     for (int i = 0; i < channels; i++) {
@@ -561,7 +561,7 @@ namespace phase_limiter {
                     }
                 }
                 update_progression_bound(0.8);
-                
+
                 // flush filtered (dry sound)
                 {
                     std::lock_guard<std::mutex> lock(result_mtx);
@@ -572,12 +572,12 @@ namespace phase_limiter {
                 update_progression_bound(1);
             });
         }
-        
+
         tbb::parallel_for(0, (int)tasks.size(), [&tasks](int task_i) {
             tasks[task_i]();
         });
-        
+
         *_wave = std::move(result);
     }
-    
+
 }
