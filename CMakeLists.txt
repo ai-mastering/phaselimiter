@@ -110,7 +110,7 @@ if(WIN32)
   	${BAKUAGE_PREBUILT_DIR}/include
     ${CONDA_ROOT}/include
     ${CONDA_ROOT}/Library/include
-    ${PROJECT_SOURCE_DIR}/header_only_version
+    ${PROJECT_SOURCE_DIR}/prebuilt/win64/optim/header_only_version
   )
   set(TINY_PROCESS_SOURCES
     deps/tiny-process-library/process.hpp
