@@ -292,7 +292,7 @@ int main(int argc, char* argv[]) {
         // alpha blend foreground image
         overlay_4ch_on_3ch(foreground, &img);
 
-        const auto temp_path = (boost::filesystem::temp_directory_path() / boost::filesystem::unique_path()).native();
+        const auto temp_path = bakuage::NormalizeToString((boost::filesystem::temp_directory_path() / boost::filesystem::unique_path()).native());
         // img.save_bmp(output_path.str().c_str()); // slow
         img.save_png(temp_path.c_str());
         BufferPtr buffer;
