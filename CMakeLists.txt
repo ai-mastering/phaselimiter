@@ -52,7 +52,7 @@ message(${IPPROOT})
 
 add_compile_definitions(cimg_display=0)
 add_definitions(-DEIGEN_DONT_PARALLELIZE)
-add_definitions(-DOPTIM_USE_TBB)
+add_definitions(-DOPTIM_ENABLE_EIGEN_WRAPPERS)
 if(WIN32)
 else()
   add_definitions(-Dcimg_use_png)
