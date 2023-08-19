@@ -41,3 +41,42 @@ https://github.com/ai-mastering/phaselimiter/releases
 
 see CMakeLists
 see .circleci/config.yml
+
+### notes
+
+#### windows build
+
+- store prebuilt lib and dll at prebuilt/win64, prebuilt/win32
+
+dynamic link (reason)
+
+- libtbb: shared library is recommended officially
+- libtbbmalloc
+- libtbbmalloc_proxy
+- libsndfile: LGPL
+- libpng: probably included in VS redistributable
+- libz: probably included in VS redistributable
+
+- liblapack # require for armadillo
+- libblas # required for armadillo
+- libarmadillo.so # only shared library available in apt
+
+static link
+
+- libboost_system
+- libboost_filesystem
+- libboost_serialization
+- libboost_math_tr1
+- libboost_iostreams
+- ippimt.lib
+- ippsmt.lib
+- ippcoremt.lib
+- ippvmmt.lib
+- libbenchmark
+
+libgflags.a
+
+
+
+
+pthread

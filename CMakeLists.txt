@@ -75,9 +75,9 @@ if(WIN32)
     set(BAKUAGE_BOOST_LIB_DIR C:/pfiles2/boost_1_63_0/stage/x86/lib)
   endif()
   set(BAKUAGE_LINK_LIBRARIES
-    ${BAKUAGE_LIB_DIR}/libfftw3-3.lib
-    ${BAKUAGE_LIB_DIR}/libfftw3f-3.lib
-    ${BAKUAGE_LIB_DIR}/libFLAC_dynamic.lib
+    # ${BAKUAGE_LIB_DIR}/libfftw3-3.lib
+    # ${BAKUAGE_LIB_DIR}/libfftw3f-3.lib
+    # ${BAKUAGE_LIB_DIR}/libFLAC_dynamic.lib
     ${BAKUAGE_LIB_DIR}/libsndfile-1.lib
     # ${BAKUAGE_LIB_DIR}/gflags_static.lib
     shlwapi.lib
