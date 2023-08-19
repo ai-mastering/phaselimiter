@@ -3,7 +3,7 @@
 	url = https://github.com/kazuho/picojson.git
 [submodule "deps/eigen"]
 	path = deps/eigen
-	url = https://github.com/eigenteam/eigen-git-mirror.git
+	url = https://gitlab.com/libeigen/eigen.git
 [submodule "deps/libsimdpp"]
 	path = deps/libsimdpp
 	url = https://github.com/p12tic/libsimdpp.git
@@ -15,7 +15,7 @@
 	url = https://github.com/google/googletest.git
 [submodule "deps/optim"]
 	path = deps/optim
-	url = https://github.com/contribu/optim.git
+	url = https://github.com/kthohr/optim.git
 [submodule "deps/CImg"]
 	path = deps/CImg
 	url = https://github.com/dtschump/CImg.git

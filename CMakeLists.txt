@@ -34,8 +34,14 @@ endif()
 
 option(DISABLE_BENCH "disable bench" OFF)
 
+find_package(OpenMP REQUIRED)
+if(OpenMP_FOUND)
+    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${OpenMP_C_FLAGS}")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${OpenMP_CXX_FLAGS}")
+endif()
+
 # arma_H5Ovisitが見つからないエラー回避 https://stackoverflow.com/questions/62590370/c-armadillo-procedure-entry-point-h5ovisit-could-not-be-located-in-libarmadi
-add_definitions(-DARMA_DONT_USE_HDF5)
+# add_definitions(-DARMA_DONT_USE_HDF5)
 
 # add_definitions(-DPHASELIMITER_ENABLE_FFTW)
 
@@ -48,7 +54,8 @@ message(${IPPROOT})
 
 add_compile_definitions(cimg_display=0)
 add_definitions(-DEIGEN_DONT_PARALLELIZE)
-add_definitions(-DOPTIM_USE_TBB)
+add_definitions(-DOPTIM_ENABLE_EIGEN_WRAPPERS)
+add_definitions(-DOPTIM_USE_OMP)
 if(WIN32)
 else()
   add_definitions(-Dcimg_use_png)
@@ -162,7 +169,7 @@ else()
   # -fopt-info-vec-optimized-missed
   # auto vectorizeはそれほど速くならない。(理由: auto vectorizeできるようなところはそもそも単純で遅くない？)
   # 出力が冗長になるのでオフにした
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11 -frecord-gcc-switches -Werror -Wall -Wno-sign-compare -Wno-unused-variable -Wno-unused-but-set-variable")
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++14 -frecord-gcc-switches -Werror -Wall -Wno-sign-compare -Wno-unused-variable -Wno-unused-but-set-variable -Wno-enum-compare")
   if(SANDYBRIDGE_SUPPORT)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -march=sandybridge -mtune=sandybridge -mavx")
   else()
@@ -197,9 +204,9 @@ else()
      libippvm.a
      libpng.a
      libz.a
-     liblapack.so # require for armadillo
-     libblas.so # required for armadillo
-     libarmadillo.so # only shared library available in apt
+     # liblapack.so # require for armadillo
+     # libblas.so # required for armadillo
+     # libarmadillo.so # only shared library available in apt
      pthread
      m
      dl
