@@ -45,7 +45,7 @@ jobs:
           cp -R bin /tmp/results/bin
           cp -R CMakeFiles /tmp/results/CMakeFiles
         env:
-          CONDA_ROOT: C:/Miniconda
+          CONDA_ROOT: 'C:/Miniconda'
       - run: git clone --single-branch --depth 1 -b master https://github.com/ai-mastering/bakuage_dataset1.git /tmp/bakuage_dataset1
         shell: bash
       - name: create sound_quality2_cache for prod
