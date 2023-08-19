@@ -39,7 +39,7 @@ if(OpenMP_FOUND)
 endif()
 
 # arma_H5Ovisitが見つからないエラー回避 https://stackoverflow.com/questions/62590370/c-armadillo-procedure-entry-point-h5ovisit-could-not-be-located-in-libarmadi
-add_definitions(-DARMA_DONT_USE_HDF5)
+# add_definitions(-DARMA_DONT_USE_HDF5)
 
 # add_definitions(-DPHASELIMITER_ENABLE_FFTW)
 
@@ -203,9 +203,9 @@ else()
      libbenchmark.a
      libpng.a
      libz.a
-     liblapack.so # require for armadillo
-     libblas.so # required for armadillo
-     libarmadillo.so # only shared library available in apt
+     # liblapack.so # require for armadillo
+     # libblas.so # required for armadillo
+     # libarmadillo.so # only shared library available in apt
      pthread
      m
      dl
