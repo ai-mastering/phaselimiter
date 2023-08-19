@@ -32,7 +32,8 @@ else()
   add_compile_definitions(BA_FMA_ENABLED)
 endif()
 
-option(DISABLE_BENCH "disable bench" OFF)
+option(DISABLE_TARGET_BENCH "disable bench" OFF)
+option(DISABLE_TARGET_TEST "disable test" OFF)
 
 find_package(OpenMP REQUIRED)
 if(OpenMP_FOUND)
@@ -107,6 +108,7 @@ if(WIN32)
   include_directories(
   	${BAKUAGE_PREBUILT_DIR}/include
     ${CONDA_ROOT}/include
+    ${CONDA_ROOT}/Library/include
   )
   set(TINY_PROCESS_SOURCES
     deps/tiny-process-library/process.hpp
@@ -227,7 +229,11 @@ else()
   )
 endif()
 
+if(DISABLE_TARGET_BENCH)
+else()
 add_subdirectory(deps/googletest)
+endif()
+
 set(GFLAGS_BUILD_gflags_LIB ON)
 add_subdirectory(deps/gflags)
 
@@ -291,6 +297,8 @@ target_link_libraries(audio_analyzer
   gflags::gflags
 )
 
+if(DISABLE_TARGET_BENCH)
+else()
 file(GLOB BAKUAGE_TEST_SOURCES src/test/*)
 message("BAKUAGE_TEST_SOURCES: ${BAKUAGE_TEST_SOURCES}")
 add_executable(test ${BAKUAGE_TEST_SOURCES})
@@ -299,6 +307,7 @@ target_link_libraries(test
   gtest
   gflags::gflags
 )
+endif()
 
 file(GLOB BAKUAGE_PHASE_LIMITER_SOURCES src/phase_limiter/*)
 message("BAKUAGE_PHASE_LIMITER_SOURCES: ${BAKUAGE_PHASE_LIMITER_SOURCES}")
@@ -340,7 +349,7 @@ bakuage
 gflags::gflags
 )
 
-if(DISABLE_BENCH)
+if(DISABLE_TARGET_BENCH)
 else()
 file(GLOB BAKUAGE_BENCH_SOURCES src/bench/* src/phase_limiter/Grad*.cpp)
 message("BAKUAGE_BENCH_SOURCES: ${BAKUAGE_BENCH_SOURCES}")
