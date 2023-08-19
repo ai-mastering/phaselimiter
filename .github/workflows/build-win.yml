@@ -13,6 +13,9 @@ jobs:
       - uses: actions/checkout@v3.5.3
         with:
           submodules: recursive
+      - run: |
+          pip install tbb-devel==2021.10.0 ipp-static==2021.9.0
+        shell: bash
       - run: mkdir -p /tmp/results
         shell: bash
       - name: build release version
