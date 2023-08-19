@@ -25,9 +25,9 @@ jobs:
         shell: bash -el {0}
       - run: |
           conda install -y -c intel \
-            tbb-devel==2021.10.0 \
-            ipp-include==2021.9.0 \
-            ipp-static==2021.9.0
+            tbb-devel==2019.2 \
+            ipp-include==2019.2 \
+            ipp-static==2019.2
         shell: bash -el {0}
       - run: conda list
         shell: bash -el {0}
@@ -45,7 +45,7 @@ jobs:
           cp -R CMakeFiles /tmp/results/CMakeFiles
         env:
           CONDA_ROOT: C:/Miniconda
-          BOOST_ROOT: C:/Miniconda/Library
+          Boost_ROOT: C:/Miniconda/Library
       - run: git clone --single-branch --depth 1 -b master https://github.com/ai-mastering/bakuage_dataset1.git /tmp/bakuage_dataset1
         shell: bash
       - name: create sound_quality2_cache for prod
