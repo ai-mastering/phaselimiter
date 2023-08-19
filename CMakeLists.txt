@@ -83,15 +83,6 @@ if(WIN32)
     set(BAKUAGE_LIB_DIR ${BAKUAGE_PREBUILT_DIR}/lib/release)
   endif()
 
-  # set(Boost_USE_STATIC_LIBS OFF)
-  set(Boost_USE_MULTITHREADED ON)
-  # set(Boost_USE_STATIC_RUNTIME OFF)
-  # set(Boost_COMPILER "-vc142")
-  set(Boost_DEBUG OFF)
-  find_package(Boost REQUIRED system filesystem serialization math_tr1 iostreams)
-  include_directories(${Boost_INCLUDE_DIRS})
-  link_directories(${Boost_LIBRARY_DIRS})
-
   set(BAKUAGE_LINK_LIBRARIES
     # ${BAKUAGE_LIB_DIR}/libfftw3-3.lib
     # ${BAKUAGE_LIB_DIR}/libfftw3f-3.lib
@@ -103,7 +94,11 @@ if(WIN32)
     ippsmt.lib
     ippcoremt.lib
     ippvmmt.lib
-    ${Boost_LIBRARIES}
+    boost_system.lib
+    boost_filesystem.lib
+    boost_serialization.lib
+    boost_math_tr1.lib
+    boost_iostreams.lib
   )
   set(CONDA_ROOT $ENV{CONDA_ROOT})
   link_directories(${CONDA_ROOT}/Library/lib)
