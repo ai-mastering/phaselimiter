@@ -22,3 +22,6 @@
 [submodule "deps/tiny-process-library"]
 	path = deps/tiny-process-library
 	url = https://github.com/contribu/tiny-process-library.git
+[submodule "deps/gflags"]
+	path = deps/gflags
+	url = https://github.com/gflags/gflags.git
