@@ -15,7 +15,7 @@ jobs:
         USE_CCACHE: 1
         CCACHE_DIR: /ccache
         CMAKE_COMMAND: 'cmake -GNinja' # ninjaのほうが、oom killer発動後の復旧が速い気がする
-        MAKE_COMMAND: 'ninja -j 12 || ninja -j 4 || ninja -j 2 || ninja -j 1 || ninja -j 1 || ninja -j 1 || ninja -j 1 || ninja -j 1'
+        MAKE_COMMAND: 'ninja -j 12'
     steps:
       - uses: actions/checkout@v3.5.3
         with:
