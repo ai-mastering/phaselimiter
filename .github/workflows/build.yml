@@ -1,6 +1,8 @@
 name: build
 on:
   push:
+    branches-ignore:
+      - feature/win_ci
 jobs:
   build:
     runs-on: ubuntu-latest
