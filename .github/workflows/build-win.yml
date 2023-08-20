@@ -8,8 +8,6 @@ jobs:
   build:
     runs-on: windows-latest
     steps:
-      - run: Invoke-WebRequest https://aka.ms/vs/17/release/vc_redist.x64.exe -OutFile D:\vc_redist.x64.exe
-      - run: D:\vc_redist.x64.exe /install /passive /norestart
       - uses: actions/checkout@v3.5.3
         with:
           submodules: recursive
@@ -64,37 +62,53 @@ jobs:
           cp ${CONDA_ROOT}/Library/bin/zstd.dll /tmp/results/bin
         env:
           CONDA_ROOT: C:/Miniconda/envs/test
-      - run: git clone --single-branch --depth 1 -b master https://github.com/ai-mastering/bakuage_dataset1.git /tmp/bakuage_dataset1
-        shell: bash
-      - run: bin/audio_analyzer --help
-        shell: bash
-      - name: create sound_quality2_cache for prod
-        shell: bash
-        run: |
-          cd bin
-          audio_analyzer --mode=sound_quality2_preparation --analysis_data_dir=/tmp/bakuage_dataset1/analysis_shortpath --sound_quality2_cache=/tmp/results/sound_quality2_cache
-          cp /tmp/results/sound_quality2_cache resource/sound_quality2_cache
-      - name: create release tar
-        shell: bash
-        run: |
-          (
-            mv bin built
-            mv .circleci/executable_licenses ./
-            mkdir -p /tmp/phaselimiter_build
-            cp -r . /tmp/phaselimiter_build/phaselimiter
-            cd /tmp/phaselimiter_build
-            tar -Jcf /tmp/results/release.tar.xz -T phaselimiter/.circleci/release_files.txt
-          )
       - uses: actions/upload-artifact@v3
         with:
           name: build-results
           path: /tmp/results
+  archive:
+    needs: build
+    runs-on: windows-latest
+    steps:
+#      - run: Invoke-WebRequest https://aka.ms/vs/17/release/vc_redist.x64.exe -OutFile D:\vc_redist.x64.exe
+#      - run: D:\vc_redist.x64.exe /install /passive /norestart
+      - uses: actions/checkout@v3.5.3
+      - uses: actions/download-artifact@v3
+        with:
+          name: build-results
+          path: /tmp/results
+      - run: mkdir -p /tmp/archive_results
+        shell: bash
+      - run: git clone --single-branch --depth 1 -b master https://github.com/ai-mastering/bakuage_dataset1.git /tmp/bakuage_dataset1
+        shell: bash
+      - run: /tmp/results/bin/audio_analyzer --help
+        shell: bash
+      - name: create sound_quality2_cache for prod
+        shell: bash
+        run: |
+          /tmp/results/bin/audio_analyzer --mode=sound_quality2_preparation --analysis_data_dir=/tmp/bakuage_dataset1/analysis_shortpath --sound_quality2_cache=/tmp/sound_quality2_cache
+          cp /tmp/sound_quality2_cache resource/sound_quality2_cache
+      - name: create release tar
+        shell: bash
+        run: |
+          (
+            mv /tmp/results/bin built
+            mv .circleci/executable_licenses ./
+            mkdir -p /tmp/phaselimiter_build
+            cp -r . /tmp/phaselimiter_build/phaselimiter
+            cd /tmp/phaselimiter_build
+            tar -Jcf /tmp/archive_results/release.tar.xz -T phaselimiter/.circleci/release_files.txt
+          )
+      - uses: actions/upload-artifact@v3
+        with:
+          name: archive-results
+          path: /tmp/archive_results
   test:
     needs: build
     runs-on: windows-latest
     steps:
-      - run: Invoke-WebRequest https://aka.ms/vs/17/release/vc_redist.x64.exe -OutFile D:\vc_redist.x64.exe
-      - run: D:\vc_redist.x64.exe /install /passive /norestart
+#      - run: Invoke-WebRequest https://aka.ms/vs/17/release/vc_redist.x64.exe -OutFile D:\vc_redist.x64.exe
+#      - run: D:\vc_redist.x64.exe /install /passive /norestart
       - uses: actions/checkout@v3.5.3
       - name: install ffmpeg
         run: |
@@ -112,8 +126,7 @@ jobs:
       - run: mv /tmp/results/bin ./bin && chmod +x ./bin/* && mkdir -p /tmp/test_results
         shell: bash
       - run: |
-          cd bin
-          phase_limiter --input ../test_data/test2.wav --output /tmp/test_results/output.wav --mastering=true --mastering_mode=mastering5 --sound_quality2_cache=/tmp/results/sound_quality2_cache
+          bin/phase_limiter --input test_data/test2.wav --output /tmp/test_results/output.wav --mastering=true --mastering_mode=mastering5 --sound_quality2_cache=/tmp/results/sound_quality2_cache
         shell: bash
       - uses: actions/upload-artifact@v3
         with:
