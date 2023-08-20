@@ -73,6 +73,12 @@ jobs:
           CONDA_ROOT: C:/Miniconda/envs/test
       - run: git clone --single-branch --depth 1 -b master https://github.com/ai-mastering/bakuage_dataset1.git /tmp/bakuage_dataset1
         shell: bash
+      - run: bin/audio_analyzer --help
+        shell: cmd
+      - run: bin/audio_analyzer --help
+        shell: pwsh
+      - run: bin/audio_analyzer --help
+        shell: powershell
       - name: create sound_quality2_cache for prod
         shell: bash
         run: |
