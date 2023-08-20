@@ -78,8 +78,6 @@ jobs:
     needs: build
     runs-on: windows-latest
     steps:
-#      - run: Invoke-WebRequest https://aka.ms/vs/17/release/vc_redist.x64.exe -OutFile D:\vc_redist.x64.exe
-#      - run: D:\vc_redist.x64.exe /install /passive /norestart
       - uses: actions/checkout@v3.5.3
       - uses: actions/download-artifact@v3
         with:
@@ -117,8 +115,6 @@ jobs:
     needs: build
     runs-on: windows-latest
     steps:
-#      - run: Invoke-WebRequest https://aka.ms/vs/17/release/vc_redist.x64.exe -OutFile D:\vc_redist.x64.exe
-#      - run: D:\vc_redist.x64.exe /install /passive /norestart
       - uses: actions/checkout@v3.5.3
       - name: install ffmpeg
         run: |
