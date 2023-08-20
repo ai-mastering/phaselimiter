@@ -15,15 +15,11 @@ jobs:
         with:
           auto-update-conda: true
           python-version: 3.11
-      - name: install ffmpeg
+      - name: install redist
         run: |
-          (
-          cd /tmp
-          curl -L https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip > ffmpeg.zip
-          unzip ffmpeg.zip
-          )
-          mv /tmp/ffmpeg-6.0-essentials_build/bin/ffmpeg ./
-        shell: bash
+          curl -L https://aka.ms/vs/17/release/vc_redist.x64.exe > vc_redist.x64.exe
+          chmod +x vc_redist.x64.exe
+      - run: vc_redist.x64.exe /install /passive /norestart
       - run: conda info
         shell: bash -el {0}
       - run: |

@@ -46,22 +46,24 @@ see .circleci/config.yml
 
 #### windows build
 
+install
+
+- install vc_redist x64
+- install ffmpeg
+- extract files
+
 dynamic link (reason)
 
-- libtbb: shared library is recommended officially
-- libtbbmalloc
-- libtbbmalloc_proxy
-- libsndfile: LGPL, stored in prebuilt
-- libpng: probably included in VS redistributable
-- libz: probably included in VS redistributable
+- tbb.dll: shared library is recommended officially
+- tbbmalloc.dll
+- sndfile.dll: LGPL, stored in prebuilt
+- boost: dynamic link is used in conda boost
+- zlib.dll: used by boost_iostreams
+- zstd.dll: used by boost_iostreams
+- libbz2.dll: used by boost_iostreams
 
 static link
 
-- libboost_system
-- libboost_filesystem
-- libboost_serialization
-- libboost_math_tr1
-- libboost_iostreams
 - ippimt.lib
 - ippsmt.lib
 - ippcoremt.lib
