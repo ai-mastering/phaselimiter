@@ -8,6 +8,12 @@ jobs:
   build:
     runs-on: windows-latest
     steps:
+      - name: install redist
+        run: |
+          curl -L https://aka.ms/vs/17/release/vc_redist.x64.exe > vc_redist.x64.exe
+          chmod +x vc_redist.x64.exe
+      - run: vc_redist.x64.exe /install /passive /norestart
+        shell: cmd
       - uses: actions/checkout@v3.5.3
         with:
           submodules: recursive
@@ -15,11 +21,6 @@ jobs:
         with:
           auto-update-conda: true
           python-version: 3.11
-      - name: install redist
-        run: |
-          curl -L https://aka.ms/vs/17/release/vc_redist.x64.exe > vc_redist.x64.exe
-          chmod +x vc_redist.x64.exe
-      - run: vc_redist.x64.exe /install /passive /norestart
       - run: conda info
         shell: bash -el {0}
       - run: |
