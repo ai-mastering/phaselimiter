@@ -32,6 +32,7 @@ jobs:
         shell: bash -el {0}
       - run: ls C:/Miniconda/envs/test
       - run: ls C:/Miniconda/envs/test/Library
+      - run: ls C:/Miniconda/envs/test/Library/bin
       - run: ls C:/Miniconda/envs/test/Library/lib
       - run: ls C:/Miniconda/envs/test/Library/include
       - run: mkdir -p /tmp/results
