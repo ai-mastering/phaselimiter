@@ -3,9 +3,7 @@ on:
   push:
 env:
   CMAKE_COMMAND: 'cmake'
-  MAKE_COMMAND: 'cmake --build .'
-#  MAKE_COMMAND: 'cmake --build . --target all'
-#  MAKE_COMMAND: 'msbuild all.vcxproj /t:build /p:configuration=Release /p:platform=x64 -maxcpucount'
+  MAKE_COMMAND: 'cmake --build . --config Release'
 jobs:
   build:
     runs-on: windows-latest
