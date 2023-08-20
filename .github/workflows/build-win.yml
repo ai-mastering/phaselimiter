@@ -94,7 +94,7 @@ jobs:
         run: |
           /tmp/results/bin/audio_analyzer --mode=sound_quality2_preparation --analysis_data_dir=/tmp/bakuage_dataset1/analysis_shortpath --sound_quality2_cache=/tmp/sound_quality2_cache
           cp /tmp/sound_quality2_cache resource/sound_quality2_cache
-      - name: create release tar
+      - name: create release zip
         shell: bash
         run: |
           (
@@ -103,7 +103,7 @@ jobs:
             mkdir -p /tmp/phaselimiter_build
             cp -r . /tmp/phaselimiter_build/phaselimiter
             cd /tmp/phaselimiter_build
-            tar -Jcf /tmp/archive_results/release.tar.xz -T phaselimiter/.circleci/release_files.txt
+            cat phaselimiter/.circleci/release_files.txt | xargs zip -r /tmp/archive_results/release.zip
           )
       - run: mv /tmp/archive_results D:/archive_results
         shell: bash
