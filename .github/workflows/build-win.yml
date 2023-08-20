@@ -91,8 +91,6 @@ jobs:
         shell: bash
       - run: git clone --single-branch --depth 1 -b master https://github.com/ai-mastering/bakuage_dataset1.git /tmp/bakuage_dataset1
         shell: bash
-      - run: /tmp/results/bin/audio_analyzer --help
-        shell: bash
       - name: create sound_quality2_cache for prod
         shell: bash
         run: |
