@@ -106,9 +106,9 @@ if(WIN32)
   include_directories(${CONDA_ROOT}/Library/include)
   include_directories(prebuilt/win64/optim/header_only_version)
   set(TINY_PROCESS_SOURCES
-    deps/tiny-process-library/process.hpp
-    deps/tiny-process-library/process.cpp
-    deps/tiny-process-library/process_win.cpp
+    #deps/tiny-process-library/process.hpp
+    #deps/tiny-process-library/process.cpp
+    #deps/tiny-process-library/process_win.cpp
   )
   set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
 elseif(APPLE)
@@ -158,9 +158,9 @@ elseif(APPLE)
     ${CONDA_PREFIX}/include
   )
   set(TINY_PROCESS_SOURCES
-    deps/tiny-process-library/process.hpp
-    deps/tiny-process-library/process.cpp
-    deps/tiny-process-library/process_unix.cpp
+    #deps/tiny-process-library/process.hpp
+    #deps/tiny-process-library/process.cpp
+    #deps/tiny-process-library/process_unix.cpp
   )
 else()
   # -fopt-info-vec-optimized-missed
@@ -216,9 +216,9 @@ else()
     /opt/intel/ipp/include
   )
   set(TINY_PROCESS_SOURCES
-    deps/tiny-process-library/process.hpp
-    deps/tiny-process-library/process.cpp
-    deps/tiny-process-library/process_unix.cpp
+    #deps/tiny-process-library/process.hpp
+    #deps/tiny-process-library/process.cpp
+    #deps/tiny-process-library/process_unix.cpp
   )
 endif()
 
@@ -250,7 +250,7 @@ include_directories(
   src
   deps/bakuage/include
   deps/eigen
-  deps/tiny-process-library
+  # deps/tiny-process-library
   deps/CImg
   deps/libsimdpp
   deps/hnsw
