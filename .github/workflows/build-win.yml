@@ -48,20 +48,26 @@ jobs:
           ls -la
           bash -c "$MAKE_COMMAND"
       - shell: bash
+        env:
+          CONDA_DLL_ROOT: C:/Miniconda/envs/test/Library/bin
         run: |
           cp -R bin/Release /tmp/results/bin
           cp -R CMakeFiles /tmp/results/CMakeFiles
           cp prebuilt/win64/libsndfile-1.2.2-win64/bin/sndfile.dll /tmp/results/bin
-          cp ${CONDA_ROOT}/Library/bin/boost_system.dll /tmp/results/bin
-          cp ${CONDA_ROOT}/Library/bin/boost_filesystem.dll /tmp/results/bin
-          cp ${CONDA_ROOT}/Library/bin/boost_serialization.dll /tmp/results/bin
-          cp ${CONDA_ROOT}/Library/bin/boost_math_tr1.dll /tmp/results/bin
-          cp ${CONDA_ROOT}/Library/bin/boost_iostreams.dll /tmp/results/bin
-          cp ${CONDA_ROOT}/Library/bin/tbb.dll /tmp/results/bin
-          cp ${CONDA_ROOT}/Library/bin/tbbmalloc.dll /tmp/results/bin
-          cp ${CONDA_ROOT}/Library/bin/libbz2.dll /tmp/results/bin
-          cp ${CONDA_ROOT}/Library/bin/zlib.dll /tmp/results/bin
-          cp ${CONDA_ROOT}/Library/bin/zstd.dll /tmp/results/bin
+          (
+          cd C:/Miniconda/envs/test/Library/bin
+          cp boost_system.dll \
+            boost_filesystem.dll \
+            boost_serialization.dll \
+            boost_math_tr1.dll \
+            boost_iostreams.dll \
+            tbb.dll \
+            tbbmalloc.dll \
+            libbz2.dll \
+            zlib.dll \
+            zstd.dll \
+            /tmp/results/bin
+          )
       - uses: actions/upload-artifact@v3
         with:
           name: build-results
