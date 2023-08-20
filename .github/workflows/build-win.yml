@@ -8,12 +8,8 @@ jobs:
   build:
     runs-on: windows-latest
     steps:
-      - name: install redist
-        run: |
-          curl -L https://aka.ms/vs/17/release/vc_redist.x64.exe > vc_redist.x64.exe
-          chmod +x vc_redist.x64.exe
-      - run: vc_redist.x64.exe /install /passive /norestart
-        shell: cmd
+      - run: Invoke-WebRequest https://aka.ms/vs/17/release/vc_redist.x64.exe -OutFile D:\vc_redist.x64.exe
+      - run: D:\vc_redist.x64.exe /install /passive /norestart
       - uses: actions/checkout@v3.5.3
         with:
           submodules: recursive
