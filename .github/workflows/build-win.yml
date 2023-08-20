@@ -44,7 +44,8 @@ jobs:
           ls -la
           bash -c "$MAKE_COMMAND"
 
-          cp -R bin /tmp/results/bin
+          cp bin/Release/* bin
+          cp -R bin/Release /tmp/results/bin
           cp -R CMakeFiles /tmp/results/CMakeFiles
         env:
           CONDA_ROOT: C:/Miniconda/envs/test
