@@ -71,7 +71,8 @@ jobs:
       - name: create sound_quality2_cache for prod
         shell: bash
         run: |
-          bin/audio_analyzer --mode=sound_quality2_preparation --analysis_data_dir=/tmp/bakuage_dataset1/analysis_shortpath --sound_quality2_cache=/tmp/results/sound_quality2_cache
+          cd bin
+          audio_analyzer --mode=sound_quality2_preparation --analysis_data_dir=/tmp/bakuage_dataset1/analysis_shortpath --sound_quality2_cache=/tmp/results/sound_quality2_cache
           cp /tmp/results/sound_quality2_cache resource/sound_quality2_cache
       - name: create release tar
         shell: bash
@@ -111,7 +112,8 @@ jobs:
       - run: mv /tmp/results/bin ./bin && chmod +x ./bin/* && mkdir -p /tmp/test_results
         shell: bash
       - run: |
-          bin/phase_limiter --input test_data/test2.wav --output /tmp/test_results/output.wav --mastering=true --mastering_mode=mastering5 --sound_quality2_cache=/tmp/results/sound_quality2_cache
+          cd bin
+          phase_limiter --input ../test_data/test2.wav --output /tmp/test_results/output.wav --mastering=true --mastering_mode=mastering5 --sound_quality2_cache=/tmp/results/sound_quality2_cache
         shell: bash
       - uses: actions/upload-artifact@v3
         with:
