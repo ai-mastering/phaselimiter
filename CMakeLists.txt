@@ -113,6 +113,7 @@ elseif(APPLE)
 
   find_package(Boost REQUIRED COMPONENTS filesystem math_tr1 serialization system)
 
+  set(CONDA_PREFIX $ENV{CONDA_PREFIX})
   set(BAKUAGE_LINK_LIBRARIES
      # libfftw3.a
      # libfftw3f.a
@@ -138,7 +139,6 @@ elseif(APPLE)
      pthread
      m
   )
-  set(CONDA_PREFIX $ENV{CONDA_PREFIX})
   link_directories(BEFORE
     ${Boost_LIBRARY_DIRS}
     ${CONDA_PREFIX}/lib
