@@ -1,5 +1,13 @@
 #include "bakuage/stacktrace.h"
 
+#if defined(_WIN32)
+
+namespace bakuage {
+    void RegisterStacktracePrinter() {}
+}
+
+#else
+
 #include <stdio.h>
 #include <execinfo.h>
 #include <signal.h>
@@ -34,3 +42,5 @@ namespace bakuage {
         signal(SIGSEGV, SignalHandler);
     }
 }
+
+#endif
