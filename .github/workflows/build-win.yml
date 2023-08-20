@@ -28,8 +28,7 @@ jobs:
       - run: |
           conda install -y -c conda-forge \
             boost==1.82.0 \
-            armadillo==12.6.2 \
-            ffmpeg==4.3.1
+            armadillo==12.6.2
         shell: bash -el {0}
       - run: conda list
         shell: bash -el {0}
@@ -96,6 +95,8 @@ jobs:
     needs: build
     runs-on: windows-latest
     steps:
+      - run: Invoke-WebRequest https://aka.ms/vs/17/release/vc_redist.x64.exe -OutFile D:\vc_redist.x64.exe
+      - run: D:\vc_redist.x64.exe /install /passive /norestart
       - uses: actions/checkout@v3.5.3
       - name: install ffmpeg
         run: |
