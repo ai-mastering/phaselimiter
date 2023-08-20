@@ -1,0 +1,150 @@
+name: build-win
+on:
+  push:
+env:
+  CMAKE_COMMAND: 'cmake'
+  MAKE_COMMAND: 'cmake --build . --config Release'
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v3.5.3
+        with:
+          submodules: recursive
+      - uses: conda-incubator/setup-miniconda@v2
+        with:
+          auto-update-conda: true
+          python-version: 3.11
+      - run: conda info
+        shell: bash -el {0}
+      - run: |
+          conda install -y -c intel \
+            tbb-devel==2019.2 \
+            ipp-include==2019.2 \
+            ipp-static==2019.2
+        shell: bash -el {0}
+      - run: |
+          conda install -y -c conda-forge \
+            boost==1.82.0 \
+            armadillo==12.6.2 \
+            libpng==1.6.39
+        shell: bash -el {0}
+      - run: conda list
+        shell: bash -el {0}
+      - run: ls C:/Miniconda/envs/test
+      - run: ls C:/Miniconda/envs/test/Library
+      - run: ls C:/Miniconda/envs/test/Library/bin
+      - run: ls C:/Miniconda/envs/test/Library/lib
+      - run: ls C:/Miniconda/envs/test/Library/include
+      - run: mkdir -p /tmp/results
+        shell: bash
+      - name: build release version
+        shell: bash
+        env:
+          CONDA_ROOT: C:/Miniconda/envs/test
+        run: |
+          # PGOは効果ない
+          $CMAKE_COMMAND -DCMAKE_BUILD_TYPE=Release -DSANDYBRIDGE_SUPPORT=ON -DDISABLE_TARGET_BENCH=ON -DDISABLE_TARGET_TEST=ON .
+          ls -la
+          bash -c "$MAKE_COMMAND"
+      - shell: bash
+        env:
+          CONDA_DLL_ROOT: C:/Miniconda/envs/test/Library/bin
+        run: |
+          cp -R bin/Release /tmp/results/bin
+          cp -R CMakeFiles /tmp/results/CMakeFiles
+          cp prebuilt/win64/libsndfile-1.2.2-win64/bin/sndfile.dll /tmp/results/bin
+          (
+          cd C:/Miniconda/envs/test/Library/bin
+          cp boost_system.dll \
+            boost_filesystem.dll \
+            boost_serialization.dll \
+            boost_math_tr1.dll \
+            boost_iostreams.dll \
+            tbb.dll \
+            tbbmalloc.dll \
+            libbz2.dll \
+            zlib.dll \
+            zstd.dll \
+            /tmp/results/bin
+          )
+      - run: mv /tmp/results D:/results
+        shell: bash
+      - uses: actions/upload-artifact@v3
+        with:
+          name: build-results
+          path: D:/results
+  archive:
+    needs: build
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v3.5.3
+      - uses: actions/download-artifact@v3
+        with:
+          name: build-results
+          path: D:/results
+      - run: mv D:/results /tmp/results
+        shell: bash
+      - run: mkdir -p /tmp/archive_results
+        shell: bash
+      - run: git clone --single-branch --depth 1 -b master https://github.com/ai-mastering/bakuage_dataset1.git /tmp/bakuage_dataset1
+        shell: bash
+      - name: create sound_quality2_cache for prod
+        shell: bash
+        run: |
+          /tmp/results/bin/audio_analyzer --mode=sound_quality2_preparation --analysis_data_dir=/tmp/bakuage_dataset1/analysis_shortpath --sound_quality2_cache=/tmp/sound_quality2_cache
+          cp /tmp/sound_quality2_cache resource/sound_quality2_cache
+      - name: create release zip
+        shell: bash
+        run: |
+          (
+            mv /tmp/results/bin built
+            mv .circleci/executable_licenses ./
+            mkdir -p /tmp/phaselimiter_build
+            cp -r . /tmp/phaselimiter_build/phaselimiter
+            cd /tmp/phaselimiter_build
+            zip -r /tmp/archive_results/release.zip $(tr '\r\n' ' ' < phaselimiter/.circleci/release_files.txt)
+          )
+      - run: mv /tmp/archive_results D:/archive_results
+        shell: bash
+      - uses: actions/upload-artifact@v3
+        with:
+          name: archive-results
+          path: D:/archive_results
+  test:
+    needs: build
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v3.5.3
+      - name: install ffmpeg
+        run: |
+          (
+          cd /tmp
+          curl -L https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip > ffmpeg.zip
+          unzip ffmpeg.zip
+          )
+          mv /tmp/ffmpeg-6.0-essentials_build/bin/ffmpeg ./
+        shell: bash
+      - uses: actions/download-artifact@v3
+        with:
+          name: build-results
+          path: D:/results
+      - run: mv D:/results /tmp/results
+        shell: bash
+      - run: mv /tmp/results/bin ./bin && chmod +x ./bin/* && mkdir -p /tmp/test_results
+        shell: bash
+      - run: git clone --single-branch --depth 1 -b master https://github.com/ai-mastering/bakuage_dataset1.git /tmp/bakuage_dataset1
+        shell: bash
+      - name: create sound_quality2_cache for prod
+        shell: bash
+        run: |
+          bin/audio_analyzer --mode=sound_quality2_preparation --analysis_data_dir=/tmp/bakuage_dataset1/analysis_shortpath --sound_quality2_cache=/tmp/sound_quality2_cache
+      - run: |
+          bin/phase_limiter --input test_data/test2.wav --output /tmp/test_results/output.wav --mastering=true --mastering_mode=mastering5 --sound_quality2_cache=/tmp/sound_quality2_cache
+        shell: bash
+      - run: mv /tmp/test_results D:/test_results
+        shell: bash
+      - uses: actions/upload-artifact@v3
+        with:
+          name: test-results
+          path: D:/test_results
