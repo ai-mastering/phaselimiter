@@ -15,6 +15,15 @@ jobs:
         with:
           auto-update-conda: true
           python-version: 3.11
+      - name: install ffmpeg
+        run: |
+          (
+          cd /tmp
+          curl -L https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip > ffmpeg.zip
+          unzip ffmpeg.zip
+          )
+          mv /tmp/ffmpeg-6.0-essentials_build/bin/ffmpeg ./
+        shell: bash
       - run: conda info
         shell: bash -el {0}
       - run: |
@@ -26,7 +35,8 @@ jobs:
       - run: |
           conda install -y -c conda-forge \
             boost==1.82.0 \
-            armadillo==12.6.2
+            armadillo==12.6.2 \
+            ffmpeg==4.3.1
         shell: bash -el {0}
       - run: conda list
         shell: bash -el {0}
@@ -49,7 +59,6 @@ jobs:
           cp -R bin/Release /tmp/results/bin
           cp -R CMakeFiles /tmp/results/CMakeFiles
           cp prebuilt/win64/libsndfile-1.2.2-win64/bin/sndfile.dll /tmp/results/bin
-          # cp ${CONDA_ROOT}/Library/bin/armadillo.dll /tmp/results/bin
           cp ${CONDA_ROOT}/Library/bin/boost_system.dll /tmp/results/bin
           cp ${CONDA_ROOT}/Library/bin/boost_filesystem.dll /tmp/results/bin
           cp ${CONDA_ROOT}/Library/bin/boost_serialization.dll /tmp/results/bin
@@ -89,6 +98,15 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v3.5.3
+      - name: install ffmpeg
+        run: |
+          (
+          cd /tmp
+          curl -L https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip > ffmpeg.zip
+          unzip ffmpeg.zip
+          )
+          mv /tmp/ffmpeg-6.0-essentials_build/bin/ffmpeg ./
+        shell: bash
       - uses: actions/download-artifact@v3
         with:
           name: build-results
