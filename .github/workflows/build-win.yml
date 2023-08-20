@@ -97,16 +97,15 @@ jobs:
       - name: create release zip
         shell: bash
         run: |
-          (
-            mv /tmp/results/bin built
-            mv .circleci/executable_licenses ./
-            mkdir -p /tmp/phaselimiter_build
-            cp -r . /tmp/phaselimiter_build/phaselimiter
-            cd /tmp/phaselimiter_build
-            zip -r /tmp/archive_results/release.zip $(tr '\r\n' ' ' < phaselimiter/.circleci/release_files.txt)
-          )
-      - run: mv /tmp/archive_results D:/archive_results
-        shell: bash
+          mkdir D:/archive_results
+          mkdir D:/phaselimiter
+          mv /tmp/results/bin D:/phaselimiter/built
+          mv .circleci/executable_licenses D:/phaselimiter
+          mv resource D:/phaselimiter
+          mv test_data D:/phaselimiter
+          mv LICENSE D:/phaselimiter
+          mv README.md D:/phaselimiter
+      - run: Compress-Archive -Path D:/phaselimiter -DestinationPath D:/archive_results/release.zip
       - uses: actions/upload-artifact@v3
         with:
           name: archive-results
