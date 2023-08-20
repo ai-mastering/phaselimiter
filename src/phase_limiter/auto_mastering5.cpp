@@ -113,7 +113,7 @@ namespace phase_limiter {
         bakuage::SoundQuality2Calculator calculator;
         {
             std::cerr << "load sound_quality2_cache: " << FLAGS_sound_quality2_cache << std::endl;
-            std::ifstream ifs(FLAGS_sound_quality2_cache);
+            std::ifstream ifs(FLAGS_sound_quality2_cache, std::ios::binary);
             boost::archive::binary_iarchive ia(ifs);
             ia >> calculator;
         }

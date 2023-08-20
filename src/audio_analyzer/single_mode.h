@@ -313,11 +313,12 @@ int single_mode() {
         if (FLAGS_sound_quality2) {
             bakuage::SoundQuality2Calculator calculator;
             {
-                std::ifstream ifs(FLAGS_sound_quality2_cache);
                 if (FLAGS_sound_quality2_cache_archiver == "binary") {
+                    std::ifstream ifs(FLAGS_sound_quality2_cache, std::ios::binary);
                     boost::archive::binary_iarchive ia(ifs);
                     ia >> calculator;
                 } else if (FLAGS_sound_quality2_cache_archiver == "text") {
+                    std::ifstream ifs(FLAGS_sound_quality2_cache);
                     boost::archive::text_iarchive ia(ifs);
                     ia >> calculator;
                 } else {
