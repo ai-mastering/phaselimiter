@@ -5,7 +5,7 @@
 #include <stdexcept>
 #include <sstream>
 #include <mutex>
-#include "process.hpp"
+//#include "process.hpp"
 
 namespace bakuage {
 
@@ -16,26 +16,19 @@ public:
         std::stringstream command, out, err;
         std::mutex m;
 
-        command << ffmpeg_path << " -i \"" << input_filename << "\" " 
+        command << ffmpeg_path << " -i \"" << input_filename << "\" "
             << options << " \"" << output_filename << "\"";
-        
+
+        int exit_status = std::system(command.str().c_str());
+
+
+
+/*
         // Processの後にmが解放されるようにする
         int exit_status = 0;
-        {        
+        {
             std::cerr << "process " << command.str() << std::endl;
-            Process process(command.str(), ""/*,
-                [&out, &m](const char *bytes, size_t n) {
-                    //std::lock_guard<std::mutex> lock(m);
-                    //out << std::string(bytes, n);
-                    //std::cout << std::string(bytes, n); 
-                    std::cout << "out" << std::endl;
-                },
-                [&err, &m](const char *bytes, size_t n) {
-                    //std::lock_guard<std::mutex> lock(m);
-                    //err << std::string(bytes, n);
-                    //std::cerr << std::string(bytes, n); 
-                    std::cout << "err" << std::endl;
-                }*/
+            Process process(command.str(), ""
             );
             std::cerr << "process called" << std::endl;
 
@@ -48,12 +41,14 @@ public:
 
             exit_status = process.get_exit_status();
             std::cerr << "exit_status" << exit_status << std::endl;
-        }    
+        }
+        */
         if (exit_status) {
             std::lock_guard<std::mutex> lock(m);
             std::stringstream message;
             message << "ffmpeg unsuccessful terminated exit status: " << exit_status
-                << ", stdout: " << out.str() << ", stderr: " << err.str();
+            ;
+//                << ", stdout: " << out.str() << ", stderr: " << err.str();
             throw std::logic_error(message.str());
         }
     }
