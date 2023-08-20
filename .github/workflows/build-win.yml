@@ -103,7 +103,7 @@ jobs:
             mkdir -p /tmp/phaselimiter_build
             cp -r . /tmp/phaselimiter_build/phaselimiter
             cd /tmp/phaselimiter_build
-            cat phaselimiter/.circleci/release_files.txt | xargs zip -r /tmp/archive_results/release.zip
+            zip -r /tmp/archive_results/release.zip $(tr '\r\n' ' ' < phaselimiter/.circleci/release_files.txt)
           )
       - run: mv /tmp/archive_results D:/archive_results
         shell: bash
@@ -133,8 +133,14 @@ jobs:
         shell: bash
       - run: mv /tmp/results/bin ./bin && chmod +x ./bin/* && mkdir -p /tmp/test_results
         shell: bash
+      - run: git clone --single-branch --depth 1 -b master https://github.com/ai-mastering/bakuage_dataset1.git /tmp/bakuage_dataset1
+        shell: bash
+      - name: create sound_quality2_cache for prod
+        shell: bash
+        run: |
+          bin/audio_analyzer --mode=sound_quality2_preparation --analysis_data_dir=/tmp/bakuage_dataset1/analysis_shortpath --sound_quality2_cache=/tmp/sound_quality2_cache
       - run: |
-          bin/phase_limiter --input test_data/test2.wav --output /tmp/test_results/output.wav --mastering=true --mastering_mode=mastering5 --sound_quality2_cache=/tmp/results/sound_quality2_cache
+          bin/phase_limiter --input test_data/test2.wav --output /tmp/test_results/output.wav --mastering=true --mastering_mode=mastering5 --sound_quality2_cache=/tmp/sound_quality2_cache
         shell: bash
       - run: mv /tmp/test_results D:/test_results
         shell: bash
