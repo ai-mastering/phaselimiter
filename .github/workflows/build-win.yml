@@ -68,10 +68,12 @@ jobs:
             zstd.dll \
             /tmp/results/bin
           )
+      - run: mv /tmp/results D:/results
+        shell: bash
       - uses: actions/upload-artifact@v3
         with:
           name: build-results
-          path: /tmp/results
+          path: D:/results
   archive:
     needs: build
     runs-on: windows-latest
@@ -82,7 +84,9 @@ jobs:
       - uses: actions/download-artifact@v3
         with:
           name: build-results
-          path: /tmp/results
+          path: D:/results
+      - run: mv D:/results /tmp/results
+        shell: bash
       - run: mkdir -p /tmp/archive_results
         shell: bash
       - run: git clone --single-branch --depth 1 -b master https://github.com/ai-mastering/bakuage_dataset1.git /tmp/bakuage_dataset1
@@ -105,10 +109,12 @@ jobs:
             cd /tmp/phaselimiter_build
             tar -Jcf /tmp/archive_results/release.tar.xz -T phaselimiter/.circleci/release_files.txt
           )
+      - run: mv /tmp/archive_results D:/archive_results
+        shell: bash
       - uses: actions/upload-artifact@v3
         with:
           name: archive-results
-          path: /tmp/archive_results
+          path: D:/archive_results
   test:
     needs: build
     runs-on: windows-latest
@@ -128,13 +134,17 @@ jobs:
       - uses: actions/download-artifact@v3
         with:
           name: build-results
-          path: /tmp/results
+          path: D:/results
+      - run: mv D:/results /tmp/results
+        shell: bash
       - run: mv /tmp/results/bin ./bin && chmod +x ./bin/* && mkdir -p /tmp/test_results
         shell: bash
       - run: |
           bin/phase_limiter --input test_data/test2.wav --output /tmp/test_results/output.wav --mastering=true --mastering_mode=mastering5 --sound_quality2_cache=/tmp/results/sound_quality2_cache
         shell: bash
+      - run: mv /tmp/test_results D:/test_results
+        shell: bash
       - uses: actions/upload-artifact@v3
         with:
           name: test-results
-          path: /tmp/test_results
+          path: D:/test_results
