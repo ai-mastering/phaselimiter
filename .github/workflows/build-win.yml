@@ -48,6 +48,15 @@ jobs:
           cp bin/Release/* bin
           cp -R bin/Release /tmp/results/bin
           cp -R CMakeFiles /tmp/results/CMakeFiles
+          cp prebuilt/win64/libsndfile-1.2.2-win64/bin/sndfile.dll /tmp/results/bin
+          cp ${CONDA_ROOT}/Library/bin/armadillo.dll /tmp/results/bin
+          cp ${CONDA_ROOT}/Library/bin/boost_system.dll /tmp/results/bin
+          cp ${CONDA_ROOT}/Library/bin/boost_filesystem.dll /tmp/results/bin
+          cp ${CONDA_ROOT}/Library/bin/boost_serialization.dll /tmp/results/bin
+          cp ${CONDA_ROOT}/Library/bin/boost_math_tr1.dll /tmp/results/bin
+          cp ${CONDA_ROOT}/Library/bin/boost_iostreams.dll /tmp/results/bin
+          cp ${CONDA_ROOT}/Library/bin/tbb.dll /tmp/results/bin
+          cp ${CONDA_ROOT}/Library/bin/tbbmalloc.dll /tmp/results/bin
         env:
           CONDA_ROOT: C:/Miniconda/envs/test
       - run: git clone --single-branch --depth 1 -b master https://github.com/ai-mastering/bakuage_dataset1.git /tmp/bakuage_dataset1
@@ -72,3 +81,21 @@ jobs:
         with:
           name: build-results
           path: /tmp/results
+  test:
+    needs: build
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v3.5.3
+      - uses: actions/download-artifact@v3
+        with:
+          name: build-results
+          path: /tmp/results
+      - run: mv /tmp/results/bin ./bin && chmod +x ./bin/* && mkdir -p /tmp/test_results
+        shell: bash
+      - run: |
+          bin/phase_limiter --input test_data/test2.wav --output /tmp/test_results/output.wav --mastering=true --mastering_mode=mastering5 --sound_quality2_cache=/tmp/results/sound_quality2_cache
+        shell: bash
+      - uses: actions/upload-artifact@v3
+        with:
+          name: test-results
+          path: /tmp/test_results
