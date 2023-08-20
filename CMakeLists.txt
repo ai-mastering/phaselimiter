@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.9)
+cmake_minimum_required(VERSION 3.12)
 
 project(phaselimiter C CXX)
 include(ExternalProject)
@@ -32,6 +32,9 @@ else()
   add_compile_definitions(BA_FMA_ENABLED)
 endif()
 
+option(DISABLE_TARGET_BENCH "disable bench" OFF)
+option(DISABLE_TARGET_TEST "disable test" OFF)
+
 # arma_H5Ovisitが見つからないエラー回避 https://stackoverflow.com/questions/62590370/c-armadillo-procedure-entry-point-h5ovisit-could-not-be-located-in-libarmadi
 add_definitions(-DARMA_DONT_USE_HDF5)
 
@@ -47,60 +50,57 @@ message(${IPPROOT})
 add_compile_definitions(cimg_display=0)
 add_definitions(-DEIGEN_DONT_PARALLELIZE)
 add_definitions(-DOPTIM_USE_TBB)
-if(WIN32)
-else()
-  add_definitions(-Dcimg_use_png)
-endif()
+add_definitions(-Dcimg_use_png)
 
 if(WIN32)
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /MP /utf-8 /arch:AVX")
   set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} /MD")
   set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} /MDd")
+  add_definitions(-DNOMINMAX)
   if(CMAKE_SIZEOF_VOID_P EQUAL 8)
     set(BAKUAGE_PREBUILT_DIR ${PROJECT_SOURCE_DIR}/prebuilt/win64)
     set(BAKUAGE_LIB_DIR ${BAKUAGE_PREBUILT_DIR}/lib)
-    set(BAKUAGE_BOOST_LIB_DIR C:/pfiles2/boost_1_63_0/stage/x64/lib)
+    include_directories(
+      prebuilt/win64/libsndfile-1.2.2-win64/include
+    )
+    link_directories(
+      prebuilt/win64/libsndfile-1.2.2-win64/lib
+    )
+    set(Boost_ARCHITECTURE "-x64")
   elseif(CMAKE_SIZEOF_VOID_P EQUAL 4)
     set(BAKUAGE_PREBUILT_DIR ${PROJECT_SOURCE_DIR}/prebuilt/win32)
     set(BAKUAGE_LIB_DIR ${BAKUAGE_PREBUILT_DIR}/lib/release)
-    set(BAKUAGE_BOOST_LIB_DIR C:/pfiles2/boost_1_63_0/stage/x86/lib)
   endif()
+
   set(BAKUAGE_LINK_LIBRARIES
-    ${BAKUAGE_LIB_DIR}/libfftw3-3.lib
-    ${BAKUAGE_LIB_DIR}/libfftw3f-3.lib
-    ${BAKUAGE_LIB_DIR}/libFLAC_dynamic.lib
-    ${BAKUAGE_LIB_DIR}/libsndfile-1.lib
-    ${BAKUAGE_LIB_DIR}/gflags_static.lib
+    # ${BAKUAGE_LIB_DIR}/libfftw3-3.lib
+    # ${BAKUAGE_LIB_DIR}/libfftw3f-3.lib
+    # ${BAKUAGE_LIB_DIR}/libFLAC_dynamic.lib
+    sndfile.lib
+    # ${BAKUAGE_LIB_DIR}/gflags_static.lib
     shlwapi.lib
     ippimt.lib
     ippsmt.lib
     ippcoremt.lib
     ippvmmt.lib
+    boost_system.lib
+    boost_filesystem.lib
+    boost_serialization.lib
+    boost_math_tr1.lib
+    boost_iostreams.lib
+    libpng_static.lib
+    zlib.lib
   )
-  link_directories(
-    ${BAKUAGE_BOOST_LIB_DIR}
-  )
-  if(CMAKE_SIZEOF_VOID_P EQUAL 8)
-    link_directories(
-      "C:/Program Files (x86)/IntelSWTools/compilers_and_libraries/windows/ipp/lib/intel64"
-      "C:/Program Files (x86)/IntelSWTools/compilers_and_libraries/windows/tbb/lib/intel64/vc14"
-    )
-  elseif(CMAKE_SIZEOF_VOID_P EQUAL 4)
-    link_directories(
-      "C:/Program Files (x86)/IntelSWTools/compilers_and_libraries/windows/ipp/lib/ia32"
-      "C:/Program Files (x86)/IntelSWTools/compilers_and_libraries/windows/tbb/lib/ia32/vc14"
-    )
-  endif()
-  include_directories(
-  	${BAKUAGE_PREBUILT_DIR}/include
-  	C:/pfiles2/boost_1_63_0
-  	"C:/Program Files (x86)/IntelSWTools/compilers_and_libraries/windows/ipp/include"
-  	"C:/Program Files (x86)/IntelSWTools/compilers_and_libraries/windows/tbb/include"
-  )
+  set(CONDA_ROOT $ENV{CONDA_ROOT})
+  link_directories(${CONDA_ROOT}/Library/lib)
+  include_directories(${BAKUAGE_PREBUILT_DIR}/include)
+  include_directories(${CONDA_ROOT}/include)
+  include_directories(${CONDA_ROOT}/Library/include)
+  include_directories(prebuilt/win64/optim/header_only_version)
   set(TINY_PROCESS_SOURCES
-    deps/tiny-process-library/process.hpp
-    deps/tiny-process-library/process.cpp
-    deps/tiny-process-library/process_win.cpp
+    #deps/tiny-process-library/process.hpp
+    #deps/tiny-process-library/process.cpp
+    #deps/tiny-process-library/process_win.cpp
   )
   set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
 elseif(APPLE)
@@ -110,15 +110,13 @@ elseif(APPLE)
   else()
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -march=core-avx2 -mtune=core-avx2 -mavx2 -mfma")
   endif()
-  SET(CMAKE_EXE_LINKER_FLAGS  "${CMAKE_EXE_LINKER_FLAGS} -rpath /opt/intel/ipp/lib")
 
   find_package(Boost REQUIRED COMPONENTS filesystem math_tr1 serialization system)
 
-  set(BAKUAGE_LIB_DIR ${BAKUAGE_PREBUILT_DIR}/lib)
   set(BAKUAGE_LINK_LIBRARIES
      # libfftw3.a
      # libfftw3f.a
-     libgflags.dylib
+     # libgflags.dylib
      libsndfile.a
      # libFLAC.a
      # libvorbisenc.a
@@ -129,33 +127,30 @@ elseif(APPLE)
      libboost_serialization.a
      libboost_math_tr1.a
      libboost_iostreams.a
-     libtbb.a
-     libtbbmalloc.a
-     /opt/intel/ipp/lib/libippi.dylib
-     /opt/intel/ipp/lib/libipps.dylib
-     /opt/intel/ipp/lib/libippvm.dylib
-     /opt/intel/ipp/lib/libippcore.dylib
-     libbenchmark.a
+     ${CONDA_PREFIX}/lib/libtbb.dylib
+     ${CONDA_PREFIX}/lib/libtbbmalloc.dylib
+     libippi.a
+     libipps.a
+     libippvm.a
+     libippcore.a
      libpng.a
      libz.a
      pthread
      m
   )
-  link_directories(
+  set(CONDA_PREFIX $ENV{CONDA_PREFIX})
+  link_directories(BEFORE
     ${Boost_LIBRARY_DIRS}
-    ${IPPROOT}/lib
-    /opt/intel/tbb/lib
-    /usr/local/opt/libtensorflow/lib
+    ${CONDA_PREFIX}/lib
   )
-  include_directories(
+  include_directories(BEFORE
     ${Boost_INCLUDE_DIRS}
-    ${IPPROOT}/include
-    /opt/intel/tbb/include
+    ${CONDA_PREFIX}/include
   )
   set(TINY_PROCESS_SOURCES
-    deps/tiny-process-library/process.hpp
-    deps/tiny-process-library/process.cpp
-    deps/tiny-process-library/process_unix.cpp
+    #deps/tiny-process-library/process.hpp
+    #deps/tiny-process-library/process.cpp
+    #deps/tiny-process-library/process_unix.cpp
   )
 else()
   # -fopt-info-vec-optimized-missed
@@ -176,7 +171,7 @@ else()
   set(BAKUAGE_LINK_LIBRARIES
    	 # libfftw3.a
    	 # libfftw3f.a
-     libgflags.a
+     # libgflags.a
      libsndfile.so
      # libFLAC.a
      # libvorbisenc.a
@@ -194,12 +189,11 @@ else()
      libipps.a
      libippcore.a
      libippvm.a
-     libbenchmark.a
      libpng.a
      libz.a
-     liblapack.so # require for armadillo
-     libblas.so # required for armadillo
-     libarmadillo.so # only shared library available in apt
+     # liblapack.so # require for armadillo
+     # libblas.so # required for armadillo
+     # libarmadillo.so # only shared library available in apt
      pthread
      m
      dl
@@ -212,13 +206,20 @@ else()
     /opt/intel/ipp/include
   )
   set(TINY_PROCESS_SOURCES
-    deps/tiny-process-library/process.hpp
-    deps/tiny-process-library/process.cpp
-    deps/tiny-process-library/process_unix.cpp
+    #deps/tiny-process-library/process.hpp
+    #deps/tiny-process-library/process.cpp
+    #deps/tiny-process-library/process_unix.cpp
   )
 endif()
 
+if(DISABLE_TARGET_BENCH)
+else()
 add_subdirectory(deps/googletest)
+endif()
+
+set(GFLAGS_BUILD_gflags_LIB ON)
+set(GFLAGS_BUILD_gflags_nothreads_LIB OFF)
+add_subdirectory(deps/gflags)
 
 if(WIN32)
 else()
@@ -239,7 +240,7 @@ include_directories(
   src
   deps/bakuage/include
   deps/eigen
-  deps/tiny-process-library
+  # deps/tiny-process-library
   deps/CImg
   deps/libsimdpp
   deps/hnsw
@@ -269,6 +270,7 @@ message("BAKUAGE_SND_FILE_INFO_SOURCES: ${BAKUAGE_SND_FILE_INFO_SOURCES}")
 add_executable(snd_file_info ${BAKUAGE_SND_FILE_INFO_SOURCES})
 target_link_libraries(snd_file_info
   bakuage
+  gflags::gflags
 )
 
 file(GLOB BAKUAGE_AUDIO_ANALYZER_SOURCES src/audio_analyzer/*)
@@ -276,21 +278,27 @@ message("BAKUAGE_AUDIO_ANALYZER_SOURCES: ${BAKUAGE_AUDIO_ANALYZER_SOURCES}")
 add_executable(audio_analyzer ${BAKUAGE_AUDIO_ANALYZER_SOURCES} ${TINY_PROCESS_SOURCES})
 target_link_libraries(audio_analyzer
   bakuage
+  gflags::gflags
 )
 
+if(DISABLE_TARGET_BENCH)
+else()
 file(GLOB BAKUAGE_TEST_SOURCES src/test/*)
 message("BAKUAGE_TEST_SOURCES: ${BAKUAGE_TEST_SOURCES}")
 add_executable(test ${BAKUAGE_TEST_SOURCES})
 target_link_libraries(test
   bakuage
   gtest
+  gflags::gflags
 )
+endif()
 
 file(GLOB BAKUAGE_PHASE_LIMITER_SOURCES src/phase_limiter/*)
 message("BAKUAGE_PHASE_LIMITER_SOURCES: ${BAKUAGE_PHASE_LIMITER_SOURCES}")
 add_executable(phase_limiter ${BAKUAGE_PHASE_LIMITER_SOURCES} ${TINY_PROCESS_SOURCES})
 target_link_libraries(phase_limiter
   bakuage
+  gflags::gflags
 )
 
 file(GLOB BAKUAGE_SPECTROGRAM_SOURCES src/spectrogram/*)
@@ -298,6 +306,7 @@ message("BAKUAGE_SPECTROGRAM_SOURCES: ${BAKUAGE_SPECTROGRAM_SOURCES}")
 add_executable(spectrogram ${BAKUAGE_SPECTROGRAM_SOURCES})
 target_link_libraries(spectrogram
 bakuage
+gflags::gflags
 )
 
 file(GLOB BAKUAGE_AUDIO_VISUALIZER_SOURCES src/audio_visualizer/*)
@@ -305,6 +314,7 @@ message("BAKUAGE_AUDIO_VISUALIZER_SOURCES: ${BAKUAGE_AUDIO_VISUALIZER_SOURCES}")
 add_executable(audio_visualizer ${BAKUAGE_AUDIO_VISUALIZER_SOURCES})
 target_link_libraries(audio_visualizer
 bakuage
+gflags::gflags
 )
 
 file(GLOB BAKUAGE_CLEAR_MIXER_SOURCES src/clear_mixer/*)
@@ -312,6 +322,7 @@ message("BAKUAGE_CLEAR_MIXER_SOURCES: ${BAKUAGE_CLEAR_MIXER_SOURCES}")
 add_executable(clear_mixer ${BAKUAGE_CLEAR_MIXER_SOURCES})
 target_link_libraries(clear_mixer
 bakuage
+gflags::gflags
 )
 
 file(GLOB BAKUAGE_EFFECT_TEST_SOURCES src/effect_test/*)
@@ -319,11 +330,16 @@ message("BAKUAGE_EFFECT_TEST_SOURCES: ${BAKUAGE_EFFECT_TEST_SOURCES}")
 add_executable(effect_test ${BAKUAGE_EFFECT_TEST_SOURCES})
 target_link_libraries(effect_test
 bakuage
+gflags::gflags
 )
 
+if(DISABLE_TARGET_BENCH)
+else()
 file(GLOB BAKUAGE_BENCH_SOURCES src/bench/* src/phase_limiter/Grad*.cpp)
 message("BAKUAGE_BENCH_SOURCES: ${BAKUAGE_BENCH_SOURCES}")
 add_executable(bench ${BAKUAGE_BENCH_SOURCES})
 target_link_libraries(bench
 bakuage
+libbenchmark.a
 )
+endif()
