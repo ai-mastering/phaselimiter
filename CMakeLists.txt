@@ -112,17 +112,18 @@ if(WIN32)
   )
   set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
 elseif(APPLE)
+  set(CONDA_PREFIX $ENV{CONDA_PREFIX})
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11")
   if(SANDYBRIDGE_SUPPORT)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -march=sandybridge -mtune=sandybridge -mavx")
   else()
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -march=core-avx2 -mtune=core-avx2 -mavx2 -mfma")
   endif()
-  SET(CMAKE_EXE_LINKER_FLAGS  "${CMAKE_EXE_LINKER_FLAGS} -rpath /opt/intel/ipp/lib")
+  # SET(CMAKE_EXE_LINKER_FLAGS  "${CMAKE_EXE_LINKER_FLAGS} -rpath /opt/intel/ipp/lib")
+  # SET(CMAKE_EXE_LINKER_FLAGS  "${CMAKE_EXE_LINKER_FLAGS} -rpath ${CONDA_PREFIX}/lib")
 
   find_package(Boost REQUIRED COMPONENTS filesystem math_tr1 serialization system)
 
-  set(BAKUAGE_LIB_DIR ${BAKUAGE_PREBUILT_DIR}/lib)
   set(BAKUAGE_LINK_LIBRARIES
      # libfftw3.a
      # libfftw3f.a
@@ -137,27 +138,24 @@ elseif(APPLE)
      libboost_serialization.a
      libboost_math_tr1.a
      libboost_iostreams.a
-     libtbb.a
-     libtbbmalloc.a
-     /opt/intel/ipp/lib/libippi.dylib
-     /opt/intel/ipp/lib/libipps.dylib
-     /opt/intel/ipp/lib/libippvm.dylib
-     /opt/intel/ipp/lib/libippcore.dylib
+     ${CONDA_PREFIX}/lib/libtbb.dylib
+     ${CONDA_PREFIX}/lib/libtbbmalloc.dylib
+     libippi.a
+     libipps.a
+     libippvm.a
+     libippcore.a
      libpng.a
      libz.a
      pthread
      m
   )
-  link_directories(
+  link_directories(BEFORE
     ${Boost_LIBRARY_DIRS}
-    ${IPPROOT}/lib
-    /opt/intel/tbb/lib
-    /usr/local/opt/libtensorflow/lib
+    ${CONDA_PREFIX}/lib
   )
-  include_directories(
+  include_directories(BEFORE
     ${Boost_INCLUDE_DIRS}
-    ${IPPROOT}/include
-    /opt/intel/tbb/include
+    ${CONDA_PREFIX}/include
   )
   set(TINY_PROCESS_SOURCES
     deps/tiny-process-library/process.hpp
