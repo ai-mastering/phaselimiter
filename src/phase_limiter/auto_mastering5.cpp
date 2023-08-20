@@ -503,7 +503,7 @@ namespace phase_limiter {
             const auto &band = calculator.bands()[band_index];
             const auto update_progression_bound = std::bind(update_progression, band_index, std::placeholders::_1);
             const auto &band_effect = effect.band_effects[band_index];
-            tasks.push_back([band, band_effect, sample_rate, frames, _wave, &result, &result_mtx, update_progression_bound]() {
+            tasks.push_back([band, band_effect, sample_rate, frames, _wave, &result, &result_mtx, update_progression_bound, channels]() {
                 const float *wave_ptr = &(*_wave)[0];
                 
                 int fir_delay_samples;
