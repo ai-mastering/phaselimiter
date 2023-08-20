@@ -96,6 +96,8 @@ if(WIN32)
     boost_serialization.lib
     boost_math_tr1.lib
     boost_iostreams.lib
+    libpng_static.lib
+    zlib.lib
   )
   set(CONDA_ROOT $ENV{CONDA_ROOT})
   link_directories(${CONDA_ROOT}/Library/lib)

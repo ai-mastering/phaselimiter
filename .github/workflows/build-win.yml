@@ -28,7 +28,8 @@ jobs:
       - run: |
           conda install -y -c conda-forge \
             boost==1.82.0 \
-            armadillo==12.6.2
+            armadillo==12.6.2 \
+            libpng==1.6.39
         shell: bash -el {0}
       - run: conda list
         shell: bash -el {0}
