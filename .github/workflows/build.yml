@@ -54,7 +54,6 @@ jobs:
       - name: create release tar
         run: |
           (
-            mv bin built
             mv .circleci/executable_licenses ./
             mkdir -p /tmp/phaselimiter_build
             cp -r . /tmp/phaselimiter_build/phaselimiter

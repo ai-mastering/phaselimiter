@@ -99,7 +99,7 @@ jobs:
         run: |
           mkdir D:/archive_results
           mkdir D:/phaselimiter
-          mv /tmp/results/bin D:/phaselimiter/built
+          mv /tmp/results/bin D:/phaselimiter
           mv .circleci/executable_licenses D:/phaselimiter
           mv resource D:/phaselimiter
           mv test_data D:/phaselimiter

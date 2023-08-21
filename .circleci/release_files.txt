@@ -1,4 +1,4 @@
-phaselimiter/built
+phaselimiter/bin
 phaselimiter/resource
 phaselimiter/script
 phaselimiter/test_data
