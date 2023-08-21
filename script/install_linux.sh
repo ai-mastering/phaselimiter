@@ -3,7 +3,7 @@
 set -ex
 
 cd $(mktemp -d)
-curl -OL https://github.com/ai-mastering/phaselimiter/releases/download/v0.1.0/release.tar.xz
+curl -OL https://github.com/ai-mastering/phaselimiter/releases/download/v0.2.0/release.tar.xz
 tar -Jxvf release.tar.xz
 #git clone -b master --depth 1 --single-branch https://github.com/ai-mastering/phaselimiter.git phaselimiter
 
