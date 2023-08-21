@@ -4,7 +4,7 @@ ENV APP_ROOT /app
 ENV RAILS_ENV production
 ENV LC_ALL=C.UTF-8
 ENV LANG=C.UTF-8
-ENV PATH /etc/phaselimiter/built:/etc/phaselimiter/script:$PATH
+ENV PATH /etc/phaselimiter/bin:/etc/phaselimiter/script:$PATH
 WORKDIR $APP_ROOT
 
 RUN (echo -e "\n\n\n" | ssh-keygen -t rsa) \
@@ -27,7 +27,7 @@ COPY . $APP_ROOT
 RUN ( \
         mv $APP_ROOT/phaselimiter /etc/phaselimiter \
         && cd /etc/phaselimiter \
-        && chmod +x built/* \
+        && chmod +x bin/* \
         && chmod +x script/audio_detector \
         && pyenv exec pipenv install \
     )
