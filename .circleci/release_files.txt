@@ -7,4 +7,4 @@ phaselimiter/LICENSE
 phaselimiter/README.md
 phaselimiter/Pipfile
 phaselimiter/Pipfile.lock
-phaselimiter/executable_licenses
+phaselimiter/licenses
