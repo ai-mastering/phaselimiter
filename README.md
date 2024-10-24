@@ -19,7 +19,7 @@ MIT
 
 todo
 
-prebuilt linux executables are available here
+prebuilt linux and windows executables are available here
 
 https://github.com/ai-mastering/phaselimiter/releases
 
