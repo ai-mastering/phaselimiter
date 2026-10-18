@@ -1,6 +1,7 @@
 #ifndef BAKUAGE_LOUDNESS_EBU_R128_H_
 #define BAKUAGE_LOUDNESS_EBU_R128_H_
 
+#include <cstddef>
 #include <vector>
 
 namespace bakuage {

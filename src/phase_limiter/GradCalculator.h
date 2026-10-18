@@ -244,7 +244,7 @@ namespace phase_limiter {
                                 };
                                 
                                 // 明らかに範囲外の場合はループを抜ける
-                                if (bg + stride <= (*it)->bg) break;
+                                if (it == temp_tasks.end() || bg + stride <= (*it)->bg) break;
                             }
                             
                             // 1ループ目はbefore_hook用に全体を舐める必要があるので、中身が無くても追加する
