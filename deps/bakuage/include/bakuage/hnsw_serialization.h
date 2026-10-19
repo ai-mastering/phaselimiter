@@ -2,6 +2,7 @@
 #define bakuage_hnsw_serialization_h
 
 #include <fstream>
+#include <memory>
 #include <boost/filesystem.hpp>
 #include "hnswlib/hnswlib.h"
 #include "bakuage/memory.h"
@@ -25,7 +26,7 @@ namespace bakuage {
     }
     
     template<class Archive, class T>
-    void LoadHnswFromArchive(Archive & ar, hnswlib::HierarchicalNSW<T> &g, const unsigned int version, hnswlib::SpaceInterface<T> *space) {
+    void LoadHnswFromArchive(Archive & ar, std::unique_ptr<hnswlib::HierarchicalNSW<T>> &g, const unsigned int version, hnswlib::SpaceInterface<T> *space) {
         const auto temp_path = NormalizeToString((boost::filesystem::temp_directory_path() / boost::filesystem::unique_path()).native());
         bakuage::AlignedPodVector<char> buffer;
         ar >> buffer;
@@ -33,7 +34,9 @@ namespace bakuage {
             std::ofstream ofs(temp_path, std::ios::binary);
             ofs.write(buffer.data(), buffer.size());
         }
-        g.loadIndex(temp_path, space);
+        // This pinned hnsw version overwrites allocated buffers in loadIndex.
+        // Load through its file constructor rather than a preallocated index.
+        g.reset(new hnswlib::HierarchicalNSW<T>(space, temp_path));
         boost::filesystem::remove(temp_path);
     }
 }

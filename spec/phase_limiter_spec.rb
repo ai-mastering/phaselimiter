@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require 'open3'
+require 'json'
 require 'shellwords'
 require 'tmpdir'
 
@@ -20,22 +21,17 @@ def ffprobe(path)
 end
 
 def get_info(path)
-  output = exec_command(Shellwords.join(['sndfile-info', path]).to_s)
-  {
-    frames: output.match(/Frames\s*:\s*(\d+)/)[1].to_i
-  }
+  tool = File.join(ENV.fetch('PHASELIMITER_BIN_DIR', 'bin'), 'snd_file_info')
+  output = exec_command(Shellwords.join([tool, "--input=#{path}"]))
+  { frames: JSON.parse(output).fetch('frames').to_i }
 end
 
 describe 'phase_limiter' do
   exec = lambda do |options|
-    path = nil
-    Dir.glob('bin/**/phase_limiter*') do |p|
-      next if p.match?(/pdb$/)
-
-      path = p
-    end
+    path = File.join(ENV.fetch('PHASELIMITER_BIN_DIR', 'bin'), 'phase_limiter')
     command = [
-      path,
+      Shellwords.escape(path),
+      "--tmp=#{Shellwords.escape(Dir.tmpdir)}",
       '--mastering_reference_file=resource/mastering_reference.json',
       '--mastering_reverb_ir_left=test_data/test5.wav',
       '--mastering_reverb_ir_right=test_data/test5.wav',

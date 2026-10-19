@@ -1,0 +1,9 @@
+# The image contains toolchains/SDKs only; source is bind-mounted at runtime.
+**
+!Dockerfile
+!environment/
+!environment/dependencies.json
+!environment/Gemfile
+!environment/Gemfile.lock
+!script/
+!script/fetch_build_dependencies.py

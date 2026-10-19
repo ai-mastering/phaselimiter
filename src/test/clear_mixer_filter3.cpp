@@ -20,6 +20,17 @@ Float ***Alloc3DFloat(int a, int b, int c) {
     }
     return result;
 }
+
+void Free2DFloat(Float **buffer, int channels) {
+    for (int ch = 0; ch < channels; ++ch) delete[] buffer[ch];
+    delete[] buffer;
+}
+
+void Free3DFloat(Float ***buffer, int tracks, int channels) {
+    for (int track = 0; track < tracks; ++track) Free2DFloat(buffer[track], channels);
+    delete[] buffer;
+}
+
 }
 
 TEST(ClearMixerFilter3, TestRatio1) {
@@ -82,6 +93,9 @@ TEST(ClearMixerFilter3, TestRatio1) {
         }
     }
     
+    Free3DFloat(input_buf, num_inputs, channels);
+    Free2DFloat(output_buf, channels);
+
     // verification
     for (int j = 0; j < samples; j++) {
         for (int ch = 0; ch < channels; ch++) {

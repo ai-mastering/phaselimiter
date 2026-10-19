@@ -138,6 +138,8 @@ void FreqExpand(std::vector<float> *wave, int channels, int sample_rate, float r
 	fftwf_destroy_plan(inv_plan);
 	fftwf_free(fft_input);
 	fftwf_free(fft_output);
+#else
+    throw std::runtime_error("--freq_expansion requires FFTW support, which is unavailable in this build");
 #endif
 }
 

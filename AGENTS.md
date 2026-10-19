@@ -7,3 +7,8 @@
   user before proceeding.
 - Test important behavior and module contracts without tying tests too closely
   to implementation details.
+
+# Local Builds
+
+- When building locally, use `cmake --build ... --parallel "$(nproc)"`.
+- Keep CI build parallelism unchanged unless explicitly requested.

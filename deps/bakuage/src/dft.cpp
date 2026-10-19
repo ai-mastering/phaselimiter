@@ -2,6 +2,7 @@
 
 #include <cstring>
 #include <iostream>
+#include <memory>
 #include <mutex>
 #include <unordered_map>
 #include "ipp.h"
@@ -482,6 +483,9 @@ namespace {
             
             if (ipp_verbose) std::cerr << "ipp dft initialized" << std::endl;
         }
+        ~MyIppC2CDft2D32() {
+            if (specPtr) ippsFree(specPtr);
+        }
         void Execute(const Float *src, Float *dest, void *work) const {
             if (ipp_verbose) std::cerr << "ipp dft execute" << std::endl;
             CheckResult(ippiDFTFwd_CToC_32fc_C1R((const Ipp32fc *)src, stride_bytes(), (Ipp32fc *)dest, stride_bytes(), specPtr, workBufferSize ? (Ipp8u *)work : nullptr));
@@ -537,6 +541,9 @@ namespace {
             
             if (ipp_verbose) std::cerr << "ipp dft initialized" << std::endl;
         }
+        ~MyIppDct2D32() {
+            if (specPtr) ippsFree(specPtr);
+        }
         void Execute(const Float *src, Float *dest, void *work) const {
             if (ipp_verbose) std::cerr << "ipp dft execute" << std::endl;
             CheckResult(ippiDCTFwd_32f_C1R(src, stride_bytes(), dest, stride_bytes(), specPtr, workBufferSize ? (Ipp8u *)work : nullptr));
@@ -568,15 +575,16 @@ namespace {
             
             const auto found = dfts_.find(len);
             if (found != dfts_.end()) {
-                return found->second;
+                return found->second.get();
             }
-            const auto dft = new T(len);
-            dfts_.insert(std::pair<typename T::Size, T *>(len, dft));
-            return dft;
+            std::unique_ptr<T> dft(new T(len));
+            const T *result = dft.get();
+            dfts_.emplace(len, std::move(dft));
+            return result;
         }
     private:
         std::mutex mtx_;
-        std::unordered_map<typename T::Size, T *, typename T::SizeHash> dfts_;
+        std::unordered_map<typename T::Size, std::unique_ptr<T>, typename T::SizeHash> dfts_;
     };
     
 }

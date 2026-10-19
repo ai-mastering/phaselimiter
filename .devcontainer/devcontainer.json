@@ -2,9 +2,16 @@
   "name": "phaselimiter",
   "build": {
     "context": "..",
-    "dockerfile": "../Dockerfile"
+    "dockerfile": "../Dockerfile",
+    "target": "development",
+    "options": [
+      "--platform=linux/amd64"
+    ]
   },
   "workspaceFolder": "/workspace",
   "workspaceMount": "source=${localWorkspaceFolder},target=/workspace,type=bind",
-  "remoteUser": "root"
+  "remoteUser": "root",
+  "runArgs": [
+    "--platform=linux/amd64"
+  ]
 }

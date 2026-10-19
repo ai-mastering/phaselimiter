@@ -46,7 +46,7 @@ void BM_GradCalculatorEval(benchmark::State& state) {
     bakuage::AlignedFree(wave);
     bakuage::AlignedFree(waveProx);
     
-    state.SetComplexityN(1.0 * waveLen / 44100 / state.range(0));
+    state.SetComplexityN(waveLen / state.range(0));
 }
 MY_SIMD_BENCH(BM_GradCalculatorEval, ->Arg(1)->Arg(2)->Arg(4)->Arg(6)->Arg(8)->Arg(12)->Complexity(benchmark::oN));
 
@@ -89,7 +89,7 @@ static void BM_GradCalculatorGrad(benchmark::State& state) {
     bakuage::AlignedFree(wave);
     bakuage::AlignedFree(waveProx);
     
-    state.SetComplexityN(1.0 * waveLen / 44100 / state.range(0));
+    state.SetComplexityN(waveLen / state.range(0));
 }
 MY_SIMD_BENCH(BM_GradCalculatorGrad, ->Arg(1)->Arg(2)->Arg(4)->Arg(6)->Arg(8)->Arg(12)->Complexity(benchmark::oN));
 

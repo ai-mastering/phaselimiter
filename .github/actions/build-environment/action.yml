@@ -1,0 +1,14 @@
+name: Build environment
+description: Build the same pinned-SDK Linux environment used by developers
+runs:
+  using: composite
+  steps:
+    - uses: docker/setup-buildx-action@v3
+    - uses: docker/build-push-action@v6
+      with:
+        context: .
+        target: build
+        load: true
+        tags: phaselimiter-build:ci
+        cache-from: type=gha,scope=phaselimiter-environment
+        cache-to: type=gha,mode=max,scope=phaselimiter-environment

@@ -1,4 +1,5 @@
 phaselimiter/bin
+phaselimiter/lib
 phaselimiter/resource
 phaselimiter/script
 phaselimiter/test_data

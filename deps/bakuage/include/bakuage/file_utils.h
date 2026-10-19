@@ -6,6 +6,9 @@
 
 namespace bakuage {
 
+// Publish through a sibling temporary file, preserving the destination on failure.
+void PublishFile(const std::string &source, const std::string &destination);
+
 class TemporaryFiles {
 public:
     TemporaryFiles(const std::string &_directory);

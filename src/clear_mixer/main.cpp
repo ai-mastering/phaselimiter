@@ -189,6 +189,14 @@ void CalculateClearMixer(const std::vector<std::vector<Float>> &input, int chann
 #endif
     }
     
+    for (int track = 0; track < input.size(); ++track) {
+        for (int ch = 0; ch < channels; ++ch) delete[] input_buf[track][ch];
+        delete[] input_buf[track];
+    }
+    delete[] input_buf;
+    for (int ch = 0; ch < channels; ++ch) delete[] output_buf[ch];
+    delete[] output_buf;
+
     std::cerr << "clear mixer: " << stop_watch.time() << std::endl;
 }
 
@@ -222,6 +230,7 @@ void SaveFloatWave(const std::vector<Float> &wave, const std::string &filename) 
         message << "sf_writef_float error: " << size;
         throw std::logic_error(message.str());
     }
+    snd_file.CloseChecked();
 }
 }
 

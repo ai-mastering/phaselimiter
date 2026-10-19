@@ -36,6 +36,7 @@
 #include "phase_limiter/freq_expander.h"
 #include "phase_limiter/config.h"
 #include "phase_limiter/wave_utils.h"
+#include "phase_limiter/cli_audio.h"
 
 DEFINE_bool(quick_exit, true, "quick exit");
 
@@ -72,7 +73,7 @@ DEFINE_int32(worker_count, 0, "worker count (0: auto detect)");
 
 DEFINE_string(reference_mode, "loudness", "reference mode (loudness, youtube_loudness, rms, peak, zero)");
 DEFINE_double(reference, -6.0, "reference level in db.");
-DEFINE_bool(disable_input_encode, false, "disable input encode before load wave.");
+DEFINE_bool(disable_input_encode, false, "disable input conversion; requires a stereo 44100 Hz WAV.");
 DEFINE_string(input, "", "Input wave file path.");
 DEFINE_string(output, "", "Output wave file path.");
 DEFINE_string(output_after_pre_compression, "", "Path of output wave file just after pre compression.");
@@ -175,9 +176,12 @@ void OutputProgression(double progression) {
 // in-place for memory efficiency
 template <class Float>
 void PhaseLimitInplace(std::vector<Float> *wave) {
+    const int oversampling_factor = phase_limiter::CheckedOversamplingFactor(
+        FLAGS_limiter_external_oversample, FLAGS_limiter_internal_oversample);
+    phase_limiter::CheckDspSampleCount(wave->size(), oversampling_factor);
     auto original_wave = *wave;
     const int base_sample_rate = 44100;
-    const int limiter_sample_rate = base_sample_rate * FLAGS_limiter_external_oversample * FLAGS_limiter_internal_oversample;
+    const int limiter_sample_rate = base_sample_rate * oversampling_factor;
 
     float max_avilable_normalized_freq = 0.5;
     if (FLAGS_max_available_freq_mode == "detect") {
@@ -186,7 +190,7 @@ void PhaseLimitInplace(std::vector<Float> *wave) {
         PrintMemoryUsage();
     }
 
-    phase_limiter::Upsample(wave, 2, FLAGS_limiter_external_oversample * FLAGS_limiter_internal_oversample);
+    phase_limiter::Upsample(wave, 2, oversampling_factor);
     std::cerr << "upsampled" << std::endl;
     PrintMemoryUsage();
 
@@ -222,7 +226,7 @@ void PhaseLimitInplace(std::vector<Float> *wave) {
         PrintMemoryUsage();
     }
 
-    phase_limiter::Downsample(wave, 2, FLAGS_limiter_external_oversample * FLAGS_limiter_internal_oversample);
+    phase_limiter::Downsample(wave, 2, oversampling_factor);
     std::cerr << "downsampled" << std::endl;
     PrintMemoryUsage();
 
@@ -266,10 +270,11 @@ void PhaseLimitInplace(std::vector<Float> *wave) {
                 bakuage::VectorMulConstantInplace(std::pow(10, FLAGS_limiting_error_spectrogram_gain / 20), grad.data(), grad.size());
                 phase_limiter::SaveFloatWave(grad, float_wav_filename);
 
-                std::stringstream ss;
-                ss << "-lavfi showspectrumpic=scale=log:s=" << FLAGS_limiting_error_spectrogram_width << "x" << FLAGS_limiting_error_spectrogram_height;
                 boost::filesystem::remove(FLAGS_limiting_error_spectrogram_output);
-                FFMpeg::Execute(FLAGS_ffmpeg, float_wav_filename, FLAGS_limiting_error_spectrogram_output, ss.str());
+                FFMpeg::Execute(FLAGS_ffmpeg, float_wav_filename, FLAGS_limiting_error_spectrogram_output,
+                    {"-lavfi", "showspectrumpic=scale=log:s=" +
+                     std::to_string(FLAGS_limiting_error_spectrogram_width) + "x" +
+                     std::to_string(FLAGS_limiting_error_spectrogram_height)});
             }
         }
     }
@@ -343,37 +348,24 @@ Float CalculateCeilingPeak(const std::vector<Float> &wave, int channels, int sam
     }
 }
 
-std::string FFMpegOutputFormatOptions(const std::string &output_format, int bit_depth, int channels, int sample_rate) {
-	std::stringstream ss;
-	if (output_format == "wav") {
-		if (bit_depth == 16) {
-			ss << " -acodec pcm_s16le -f wav ";
-		}
-		else if (bit_depth == 24) {
-			ss << " -acodec pcm_s24le -f wav ";
-		}
-		else if (bit_depth == 32) {
-			ss << " -acodec pcm_f32le -f wav ";
-		}
-		else {
-			std::stringstream er;
-			er << "unknown bit_depth " << bit_depth;
-			throw std::logic_error(er.str());
-		}
-	}
-	else if (output_format == "mp3") {
-		ss << " -acodec libmp3lame -ab 320k -f mp3 ";
-	}
-    else if (output_format == "aac") {
-        ss << " -acodec aac -b:a 256k -f adts ";
+std::vector<std::string> FFMpegOutputFormatOptions(const std::string &output_format, int bit_depth, int channels, int sample_rate) {
+    std::vector<std::string> options;
+    if (output_format == "wav") {
+        std::string codec;
+        if (bit_depth == 16) codec = "pcm_s16le";
+        else if (bit_depth == 24) codec = "pcm_s24le";
+        else if (bit_depth == 32) codec = "pcm_f32le";
+        else throw std::logic_error("unknown bit_depth " + std::to_string(bit_depth));
+        options = {"-acodec", codec, "-f", "wav"};
+    } else if (output_format == "mp3") {
+        options = {"-acodec", "libmp3lame", "-ab", "320k", "-f", "mp3"};
+    } else if (output_format == "aac") {
+        options = {"-acodec", "aac", "-b:a", "256k", "-f", "adts"};
+    } else {
+        throw std::logic_error("unknown output_format " + output_format);
     }
-	else {
-		std::stringstream er;
-		er << "unknown output_format " << output_format;
-		throw std::logic_error(er.str());
-	}
-	ss << " -ac " << channels << " -ar " << sample_rate << " ";
-	return ss.str();
+    options.insert(options.end(), {"-ac", std::to_string(channels), "-ar", std::to_string(sample_rate)});
+    return options;
 }
 
 std::string OutputFileExtension(const std::string &output_format) {
@@ -383,21 +375,23 @@ std::string OutputFileExtension(const std::string &output_format) {
 }
 
 template <class Float>
-void EncodeAvoidingClipping(const std::string &input, const std::string &output, const std::string &temp, const std::string &output_format_options, std::vector<Float> *encoded_wave) {
+void EncodeAvoidingClipping(const std::string &input, const std::string &output, const std::string &temp, const std::vector<std::string> &output_format_options, std::vector<Float> *encoded_wave) {
     const Float log2Threshold = std::log2(std::pow(10, FLAGS_ceiling / 20.0));
     const Float log2Resolution = std::log2(std::pow(10, 0.5 / 20.0));
     const int max_iter = 3;
     Float log2NewScale = log2Threshold - 0.5 * log2Resolution;
 
     for (int iter = 0; iter < max_iter; iter++) {
-		std::stringstream ss;
-		ss << output_format_options << "-filter:a \"volume = " << std::pow(2, log2NewScale) << "\"";
-		boost::filesystem::remove(output);
-		FFMpeg::Execute(FLAGS_ffmpeg, input, output, ss.str());
+        auto options = output_format_options;
+        std::ostringstream volume;
+        volume << "volume=" << std::pow(2, log2NewScale);
+        options.insert(options.end(), {"-filter:a", volume.str()});
+        boost::filesystem::remove(output);
+        FFMpeg::Execute(FLAGS_ffmpeg, input, output, options);
 
 		// クリップ検知
 		boost::filesystem::remove(temp);
-		FFMpeg::Execute(FLAGS_ffmpeg, output, temp, "-acodec pcm_f32le -ac 2 -f wav"); // not convert sample rate
+		FFMpeg::Execute(FLAGS_ffmpeg, output, temp, {"-acodec", "pcm_f32le", "-ac", "2", "-f", "wav"}); // not convert sample rate
         *encoded_wave = phase_limiter::LoadFloatWave<Float>(temp);
         const auto ceiling_peak = std::pow(10, CalculateCeilingPeak(*encoded_wave, 2, FLAGS_sample_rate) / 20.0);
         const auto log2Peak = std::log2(ceiling_peak + 1e-37);
@@ -421,11 +415,15 @@ void EncodeAvoidingClipping(const std::string &input, const std::string &output,
 void MainFunc() {
     typedef float Float;
 
-    if (FLAGS_limiter_external_oversample != bakuage::CeilPowerOf2(FLAGS_limiter_external_oversample)) {
-        throw std::logic_error("limiter_external_oversample must be power of 2");
+#ifndef PHASELIMITER_ENABLE_FFTW
+    if (FLAGS_enhancement || FLAGS_freq_expansion) {
+        throw std::runtime_error("--enhancement and --freq_expansion require FFTW support, which is unavailable in this build");
     }
-    if (FLAGS_limiter_internal_oversample != bakuage::CeilPowerOf2(FLAGS_limiter_internal_oversample)) {
-        throw std::logic_error("limiter_internal_oversample must be power of 2");
+#endif
+    phase_limiter::CheckedOversamplingFactor(
+        FLAGS_limiter_external_oversample, FLAGS_limiter_internal_oversample);
+    if (!std::isfinite(FLAGS_start_at) || !std::isfinite(FLAGS_end_at)) {
+        throw std::invalid_argument("start_at and end_at must be finite");
     }
 
 	StopWatch stop_watch;
@@ -440,12 +438,12 @@ void MainFunc() {
     std::vector<Float> wave;
     if (FLAGS_disable_input_encode) {
         // load wave in float
-        wave = phase_limiter::LoadFloatWave<Float>(FLAGS_input);
+        wave = phase_limiter::LoadFloatWave<Float>(FLAGS_input, 2, 44100);
         std::cerr << "load wave in float lap: " << stop_watch.time() << std::endl;
         PrintMemoryUsage();
     } else {
         // create normalized format wave
-        FFMpeg::Execute(FLAGS_ffmpeg, FLAGS_input, float_wav_filename, "-acodec pcm_f32le -ac 2 -ar 44100 -f wav");
+        FFMpeg::Execute(FLAGS_ffmpeg, FLAGS_input, float_wav_filename, {"-acodec", "pcm_f32le", "-ac", "2", "-ar", "44100", "-f", "wav"});
         std::cerr << "create normalized format wave lap: " << stop_watch.time() << std::endl;
         PrintMemoryUsage();
 
@@ -456,19 +454,20 @@ void MainFunc() {
     }
 
 	// cut wave with margin
-	const int start_frame = std::max<int>(0, std::min<int>(wave.size() / 2, std::floor(44100 * FLAGS_start_at)));
-	const int end_frame = std::max<int>(start_frame, std::min<int>(wave.size() / 2,
-		FLAGS_end_at < 0 ? wave.size() / 2 : std::floor(44100 * FLAGS_end_at)));
-	const int start_frame_with_margin = std::max<int>(start_frame - 0.5 * 44100, 0);
-	const int end_frame_with_margin = std::min<int>(end_frame + 0.5 * 44100, wave.size() / 2);
-	const int start_frame_in_margin = start_frame - start_frame_with_margin;
-	const int end_frame_in_margin = end_frame - start_frame_with_margin;
-	for (int i = start_frame_with_margin; i < end_frame_with_margin; i++) {
-		for (int j = 0; j < 2; j++) {
-			wave[2 * (i - start_frame_with_margin) + j] = wave[2 * i + j];
-		}
-	}
-	wave.resize(2 * (end_frame_with_margin - start_frame_with_margin));
+    const auto range = phase_limiter::CalculateAudioFrameRange(wave.size() / 2, FLAGS_start_at, FLAGS_end_at);
+    if (range.start == range.end) {
+        throw std::invalid_argument("selected audio range is empty");
+    }
+    const size_t start_frame_in_margin = range.start - range.margin_start;
+    const size_t end_frame_in_margin = range.end - range.margin_start;
+    const size_t retained_samples = 2 * (range.margin_end - range.margin_start);
+    phase_limiter::CheckDspSampleCount(retained_samples);
+    for (size_t i = range.margin_start; i < range.margin_end; ++i) {
+        for (size_t ch = 0; ch < 2; ++ch) {
+            wave[2 * (i - range.margin_start) + ch] = wave[2 * i + ch];
+        }
+    }
+    wave.resize(retained_samples);
 
 	// 整える
 	phase_limiter::CutLowAndHighFreq(&wave, 2, FLAGS_low_cut_freq / 44100, FLAGS_high_cut_freq / 44100);
@@ -503,7 +502,7 @@ void MainFunc() {
 			if (FLAGS_mastering_reverb) {
 				if (!FLAGS_mastering_reverb_ir.empty()) {
 					boost::filesystem::remove(float_wav_filename);
-					FFMpeg::Execute(FLAGS_ffmpeg, FLAGS_mastering_reverb_ir, float_wav_filename, "-acodec pcm_f32le -ac 2 -ar 44100 -f wav");
+					FFMpeg::Execute(FLAGS_ffmpeg, FLAGS_mastering_reverb_ir, float_wav_filename, {"-acodec", "pcm_f32le", "-ac", "2", "-ar", "44100", "-f", "wav"});
 					std::vector<float> ir_mono_to_stereo = phase_limiter::LoadFloatWave<Float>(float_wav_filename);
 					ir_left.resize(ir_mono_to_stereo.size());
 					ir_right.resize(ir_mono_to_stereo.size());
@@ -514,10 +513,10 @@ void MainFunc() {
 				}
 				else {
 					boost::filesystem::remove(float_wav_filename);
-					FFMpeg::Execute(FLAGS_ffmpeg, FLAGS_mastering_reverb_ir_left, float_wav_filename, "-acodec pcm_f32le -ac 2 -ar 44100 -f wav");
+					FFMpeg::Execute(FLAGS_ffmpeg, FLAGS_mastering_reverb_ir_left, float_wav_filename, {"-acodec", "pcm_f32le", "-ac", "2", "-ar", "44100", "-f", "wav"});
 					ir_left = phase_limiter::LoadFloatWave<Float>(float_wav_filename);
 					boost::filesystem::remove(float_wav_filename);
-					FFMpeg::Execute(FLAGS_ffmpeg, FLAGS_mastering_reverb_ir_right, float_wav_filename, "-acodec pcm_f32le -ac 2 -ar 44100 -f wav");
+					FFMpeg::Execute(FLAGS_ffmpeg, FLAGS_mastering_reverb_ir_right, float_wav_filename, {"-acodec", "pcm_f32le", "-ac", "2", "-ar", "44100", "-f", "wav"});
 					ir_right = phase_limiter::LoadFloatWave<Float>(float_wav_filename);
 				}
 			}
@@ -598,8 +597,7 @@ void MainFunc() {
 	if (!FLAGS_output_after_pre_compression.empty()) {
 		const bool clip_detect = FLAGS_output_format != "wav" || FLAGS_sample_rate != 44100;
 		phase_limiter::SaveFloatWave(wave, float_wav_filename);
-		std::stringstream options;
-		options << FFMpegOutputFormatOptions(
+		auto options = FFMpegOutputFormatOptions(
 			FLAGS_output_format,
 			FLAGS_bit_depth,
 			2,
@@ -607,17 +605,16 @@ void MainFunc() {
 		);
 		if (clip_detect) {
 			std::cerr << "clip detect enabled" << std::endl;
-			EncodeAvoidingClipping(float_wav_filename, encoded_filename, float_wav_filename2, options.str(), &wave);
+			EncodeAvoidingClipping(float_wav_filename, encoded_filename, float_wav_filename2, options, &wave);
 		}
 		else {
 			std::cerr << "clip detect disabled" << std::endl;
 			boost::filesystem::remove(encoded_filename);
-			FFMpeg::Execute(FLAGS_ffmpeg, float_wav_filename, encoded_filename, options.str());
+			FFMpeg::Execute(FLAGS_ffmpeg, float_wav_filename, encoded_filename, options);
 		}
 		std::cerr << "save lap: " << stop_watch.time() << std::endl;
 
-		boost::filesystem::remove(FLAGS_output_after_pre_compression);
-		boost::filesystem::rename(encoded_filename, FLAGS_output_after_pre_compression);
+		bakuage::PublishFile(encoded_filename, FLAGS_output_after_pre_compression);
 		std::cerr << "rename lap: " << stop_watch.time() << std::endl;
 
 		std::cout << "output_after_pre_compression" << std::endl;
@@ -705,7 +702,7 @@ void MainFunc() {
     bakuage::VectorMulConstantInplace(std::pow(10.0, FLAGS_ceiling / 20), wave.data(), wave.size());
 
 	// trim margin
-	for (int i = start_frame_in_margin; i < end_frame_in_margin; i++) {
+	for (size_t i = start_frame_in_margin; i < end_frame_in_margin; i++) {
 		for (int j = 0; j < 2; j++) {
 			wave[2 * (i - start_frame_in_margin) + j] = wave[2 * i + j];
 		}
@@ -727,8 +724,7 @@ void MainFunc() {
             wave.erase(wave.begin(), wave.begin() + std::min<int>(1024 * 2, wave.size() - 2));
         }
 		phase_limiter::SaveFloatWave(wave, float_wav_filename);
-		std::stringstream options;
-		options << FFMpegOutputFormatOptions(
+		auto options = FFMpegOutputFormatOptions(
 			FLAGS_output_format,
 			FLAGS_bit_depth,
 			2,
@@ -740,18 +736,17 @@ void MainFunc() {
 		<< FormatMetadata("bakuage_reference_mode", FLAGS_reference_mode)*/;
 		if (clip_detect) {
 			std::cerr << "clip detect enabled" << std::endl;
-			EncodeAvoidingClipping(float_wav_filename, encoded_filename, float_wav_filename2, options.str(), &wave);
+			EncodeAvoidingClipping(float_wav_filename, encoded_filename, float_wav_filename2, options, &wave);
 		}
 		else {
 			std::cerr << "clip detect disabled" << std::endl;
 			boost::filesystem::remove(encoded_filename);
-			FFMpeg::Execute(FLAGS_ffmpeg, float_wav_filename, encoded_filename, options.str());
+			FFMpeg::Execute(FLAGS_ffmpeg, float_wav_filename, encoded_filename, options);
 		}
 		std::cerr << "save lap: " << stop_watch.time() << std::endl;
         PrintMemoryUsage();
 
-		boost::filesystem::remove(FLAGS_output);
-		boost::filesystem::rename(encoded_filename, FLAGS_output);
+		bakuage::PublishFile(encoded_filename, FLAGS_output);
 		std::cerr << "rename lap: " << stop_watch.time() << std::endl;
         PrintMemoryUsage();
 	}

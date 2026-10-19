@@ -1,5 +1,6 @@
 #include "gtest/gtest.h"
 #include "gflags/gflags.h"
+#include <tbb/task_scheduler_init.h>
 
 int main(int argc, char* argv[]) {
     ::testing::InitGoogleTest(&argc, argv);
@@ -8,5 +9,8 @@ int main(int argc, char* argv[]) {
     gflags::SetUsageMessage("bin/test [gfalgs options] [test options]");
     gflags::ParseCommandLineFlags(&argc, &argv, true);
 
-    return RUN_ALL_TESTS();
+    tbb::task_scheduler_init scheduler;
+    const int result = RUN_ALL_TESTS();
+    scheduler.blocking_terminate();
+    return result;
 }

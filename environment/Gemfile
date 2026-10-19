@@ -1,0 +1,6 @@
+# frozen_string_literal: true
+
+# Only dependencies used by the integration tests and lint job.
+source 'https://rubygems.org'
+gem 'rspec', '~> 3.13.0'
+gem 'rubocop', '~> 1.75.0'

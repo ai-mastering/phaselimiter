@@ -173,8 +173,7 @@ namespace bakuage {
             ar & k_;
             ar & m_;
             space_.set_points(points_.data());
-            hnsw_ = std::unique_ptr<Hnsw>(new Hnsw(&space_, points_.size(), m_, 200));
-            LoadHnswFromArchive(ar, *hnsw_, version, &space_);
+            LoadHnswFromArchive(ar, hnsw_, version, &space_);
         }
         BOOST_SERIALIZATION_SPLIT_MEMBER()
         

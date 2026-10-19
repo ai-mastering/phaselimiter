@@ -212,6 +212,8 @@ void Enhance(std::vector<float> *wave, int channels) {
 	fftwf_free(fft_output);
 	fftwf_free(fft_spec_temp);
 	std::cerr << "ddddddd" << std::endl;
+#else
+    throw std::runtime_error("--enhancement requires FFTW support, which is unavailable in this build");
 #endif
 }
 

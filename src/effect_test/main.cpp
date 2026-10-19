@@ -87,6 +87,7 @@ void SaveFloatWave(const std::vector<Float> &wave, const std::string &filename) 
         message << "sf_writef_float error: " << size;
         throw std::logic_error(message.str());
     }
+    snd_file.CloseChecked();
 }
 }
 

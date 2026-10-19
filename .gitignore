@@ -40,3 +40,9 @@ version.h
 /resource/sound_quality2_cache
 /build
 /built
+
+# Personal CMake presets
+/CMakeUserPresets.json
+
+.DS_Store
+__pycache__

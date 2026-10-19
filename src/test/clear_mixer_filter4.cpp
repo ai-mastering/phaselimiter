@@ -23,6 +23,19 @@ Float ***Alloc3DFloat(int a, int b, int c) {
     }
     return result;
 }
+
+template <class Float>
+void Free2DFloat(Float **buffer, int channels) {
+    for (int ch = 0; ch < channels; ++ch) delete[] buffer[ch];
+    delete[] buffer;
+}
+
+template <class Float>
+void Free3DFloat(Float ***buffer, int tracks, int channels) {
+    for (int track = 0; track < tracks; ++track) Free2DFloat(buffer[track], channels);
+    delete[] buffer;
+}
+
     
 struct ClearMixerFilter4TestParam {
     double ratio;
@@ -170,6 +183,9 @@ void TestDry(const ClearMixerFilter4TestParam &param) {
         }
     }
     
+    Free3DFloat(input_buf, num_inputs, channels);
+    Free2DFloat(output_buf, channels);
+
     // verification
     for (int j = 0; j < samples; j++) {
         for (int ch = 0; ch < channels; ch++) {
@@ -282,6 +298,9 @@ void TestEqualToClearMixer3(const ClearMixerFilter4TestParam &param) {
         }
     }
     
+    Free3DFloat(input_buf, num_inputs, channels);
+    Free2DFloat(output_buf, channels);
+
     // verification
     for (int j = 0; j < samples * channels; j++) {
         const double max_relative_error = param.float_bits == 32 ? 1e-3 : 1e-7;

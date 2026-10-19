@@ -3,17 +3,13 @@
 require 'open3'
 require 'json'
 require 'tmpdir'
+require 'shellwords'
 
 describe 'audio_analyzer' do
   exec = lambda do |options|
     Dir.mktmpdir do |dir|
-      path = nil
-      Dir.glob('bin/**/audio_analyzer*') do |p|
-        next if p.match?(/pdb$/)
-
-        path = p
-      end
-      command = "#{path} --tmp=#{dir} #{options} --sound_quality2=false"
+      path = File.join(ENV.fetch('PHASELIMITER_BIN_DIR', 'bin'), 'audio_analyzer')
+      command = "#{Shellwords.escape(path)} --tmp=#{dir} #{options} --sound_quality2=false"
       warn command
       o, e, s = Open3.capture3(command)
       raise "command failed #{o} #{e} #{s}" unless s == 0

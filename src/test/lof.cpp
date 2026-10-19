@@ -108,8 +108,12 @@ TEST(Lof, Serialization) {
     
     DistFunc func;
     bakuage::Lof<Point, double, DistFunc> lof2(func);
-    {
-        boost::archive::binary_iarchive ia(ss);
+    // Reload the same object as well as loading a fresh one. Leak checkers
+    // verify that neither the initial nor replaced index buffers are lost.
+    const std::string serialized = ss.str();
+    for (int i = 0; i < 3; ++i) {
+        std::istringstream input(serialized);
+        boost::archive::binary_iarchive ia(input);
         ia >> lof2;
     }
     

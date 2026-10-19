@@ -2,6 +2,10 @@
 #define BAKUAGE_MEMORY_H_
 
 #include <cstring>
+#include <cstddef>
+#include <limits>
+#include <new>
+#include <stdexcept>
 #include <assert.h>
 #include <stdint.h>
 #include <algorithm>
@@ -16,7 +20,8 @@ namespace boost {
 
 namespace bakuage {
 
-	// 長さもアラインするので、 + 2 * alignment
+	// Throws bad_alloc on allocation failure or size overflow, invalid_argument
+    // for unsupported alignment. Release returned storage with AlignedFree.
     void *AlignedMalloc(size_t size, size_t alignment = 64);
     void AlignedFree(void *ptr);
     
@@ -31,14 +36,14 @@ namespace bakuage {
 		}
 		AlignedPodVector(size_t len, const T &value) : size_(0), allocated_size_(0), data_(nullptr) {
 			resize(len);
-			for (int i = 0; i < len; i++) {
+			for (size_t i = 0; i < len; i++) {
 				data_[i] = value;
 			}
 		}
         template <class It>
         AlignedPodVector(It bg, It ed) : size_(0), allocated_size_(0), data_(nullptr) {
             resize(std::distance(bg, ed));
-            int i = 0;
+            size_t i = 0;
             for (auto it = bg; it != ed; ++it) {
                 data_[i] = *it;
                 i++;
@@ -50,7 +55,7 @@ namespace bakuage {
 		AlignedPodVector(const AlignedPodVector& x): size_(0), allocated_size_(0), data_(nullptr) {
 			resize(x.size());
             if (size_) {
-                TypedMemcpy(data_, x.data_, size_);
+                std::memcpy(static_cast<void *>(data_), x.data_, sizeof(T) * size_);
             }
 		}
 		AlignedPodVector(AlignedPodVector&& x): size_(x.size_), allocated_size_(x.allocated_size_), data_(x.data_) {
@@ -66,7 +71,7 @@ namespace bakuage {
 		AlignedPodVector& operator=(const AlignedPodVector& x) {
 			resize(x.size());
             if (size_) {
-                TypedMemcpy(data_, x.data_, size_);
+                std::memcpy(static_cast<void *>(data_), x.data_, sizeof(T) * size_);
             }
 			return *this;
 		}
@@ -95,6 +100,7 @@ namespace bakuage {
 		}
 
         void push_back(const T& x) {
+            if (size_ == max_size()) throw std::length_error("aligned vector is too large");
             resize(size_ + 1);
             data_[size_ - 1] = x;
         }
@@ -112,7 +118,9 @@ namespace bakuage {
 		const T &operator[](size_t i) const { return data_[i]; }
 		void resize(size_t len) {
 			if (len > allocated_size_) {
-                DoRealloc(std::max<size_t>(len, 2 * allocated_size_));
+                if (len > max_size()) throw std::length_error("aligned vector is too large");
+                const size_t grown = allocated_size_ <= max_size() / 2 ? 2 * allocated_size_ : max_size();
+                DoRealloc(std::max(len, grown));
 			}
 			size_ = len;
 		}
@@ -139,28 +147,23 @@ namespace bakuage {
         }
         BOOST_SERIALIZATION_SPLIT_MEMBER()
         
+        static size_t max_size() {
+            return static_cast<size_t>(std::numeric_limits<std::ptrdiff_t>::max()) / sizeof(T);
+        }
         void DoRealloc(size_t new_allocated_size) {
             if (allocated_size_ == new_allocated_size) return;
-            allocated_size_ = new_allocated_size;
-            if (allocated_size_) {
-                if (data_) {
-                    T *new_data = (T *)AlignedMalloc(sizeof(T) * allocated_size_);
-                    TypedMemcpy(new_data, data_, size_);
-                    TypedFillZero(new_data + size_, allocated_size_ - size_);
-                    AlignedFree(data_);
-                    data_ = new_data;
-                }
-                else {
-                    data_ = (T *)AlignedMalloc(sizeof(T) * allocated_size_);
-                    TypedFillZero(data_, allocated_size_);
-                }
-            } else {
-                if (data_) {
-                    AlignedFree(data_);
-                    data_ = nullptr;
-                }
+            if (new_allocated_size > max_size()) throw std::length_error("aligned vector is too large");
+            T *new_data = nullptr;
+            if (new_allocated_size) {
+                new_data = static_cast<T *>(AlignedMalloc(sizeof(T) * new_allocated_size));
+                if (size_) std::memcpy(static_cast<void *>(new_data), data_, sizeof(T) * size_);
+                std::memset(static_cast<void *>(new_data + size_), 0, sizeof(T) * (new_allocated_size - size_));
             }
+            AlignedFree(data_);
+            data_ = new_data;
+            allocated_size_ = new_allocated_size;
         }
+
 		size_t size_;
         size_t allocated_size_;
 		T *data_;

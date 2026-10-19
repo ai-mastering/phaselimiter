@@ -538,6 +538,21 @@ namespace bakuage {
 	}
 
     template <>
+    void VectorReplaceNanInplace<double>(const double &c, double *x, int n) {
+        for (int i = 0; i < n; ++i) {
+            if (std::isnan(x[i])) x[i] = c;
+        }
+    }
+
+    template <>
+    void VectorBothThresholdInplace<double>(const double &c, double *x, int n) {
+        for (int i = 0; i < n; ++i) {
+            if (x[i] < -c) x[i] = -c;
+            else if (x[i] > c) x[i] = c;
+        }
+    }
+
+    template <>
     void VectorEnsureNonnegativeInplace<float>(float *x, int n) {
         ippsThreshold_32f_I(x, n, 0, ippCmpLess);
     }

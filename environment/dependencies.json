@@ -1,0 +1,78 @@
+{
+  "linux": [
+    {
+      "name": "libtbb-dev",
+      "version": "2020.3-1",
+      "url": "https://deb.debian.org/debian/pool/main/t/tbb/libtbb-dev_2020.3-1_amd64.deb",
+      "sha256": "8c3f7e2406807c93c197f19d18f5ea92d1a11a7f24c523ebfd5a0a6f3273440f",
+      "format": "deb",
+      "destination": "legacy"
+    },
+    {
+      "name": "libtbb2",
+      "version": "2020.3-1",
+      "url": "https://deb.debian.org/debian/pool/main/t/tbb/libtbb2_2020.3-1_amd64.deb",
+      "sha256": "87ac7778820cbd7a2c7485f7fccd2ac4437b39cbb390e49b3aeec38a826f5af9",
+      "format": "deb",
+      "destination": "legacy"
+    },
+    {
+      "name": "libarmadillo-dev",
+      "version": "10.1.2+dfsg-6+b1",
+      "url": "https://deb.debian.org/debian/pool/main/a/armadillo/libarmadillo-dev_10.1.2+dfsg-6+b1_amd64.deb",
+      "sha256": "1368245bcabcc26991d0e1281bd1070a46599703bcd720fbcfc39df9216b5c97",
+      "format": "deb",
+      "destination": "legacy"
+    },
+    {
+      "name": "intel-oneapi-ipp-devel",
+      "version": "2021.9.0-49452",
+      "url": "https://apt.repos.intel.com/oneapi/pool/main/intel-oneapi-ipp-devel-2021.9.0-2021.9.0-49452_amd64.deb",
+      "sha256": "bf9403a19351c5382cfe0dcfe4e3cea5f47bd761128c0292e6b4bd8c80ae0948",
+      "format": "deb",
+      "destination": "."
+    },
+    {
+      "name": "intel-oneapi-ipp-common-devel",
+      "version": "2021.9.0-49452",
+      "url": "https://apt.repos.intel.com/oneapi/pool/main/intel-oneapi-ipp-common-devel-2021.9.0-2021.9.0-49452_all.deb",
+      "sha256": "4f2e927fee2d65db15c9df5f962cd4173ed704b838dc4da48f729c92a65805e4",
+      "format": "deb",
+      "destination": "."
+    }
+  ],
+  "windows": [
+    {
+      "name": "ipp-include",
+      "version": "2019.2",
+      "url": "https://api.anaconda.org/download/intel/ipp-include/2019.2/win-64/ipp-include-2019.2-intel_190.tar.bz2",
+      "sha256": "58f66340a4f48550dbf250497e9b4047d3136ff4b07814f2ce7d7e9765db6d04",
+      "format": "tar.bz2",
+      "destination": "windows"
+    },
+    {
+      "name": "ipp-static",
+      "version": "2019.2",
+      "url": "https://api.anaconda.org/download/intel/ipp-static/2019.2/win-64/ipp-static-2019.2-intel_190.tar.bz2",
+      "sha256": "2b260c51e36c20911bb3df61c757f9e1ac5cdbec4da0bee60f5ca0ad1f7366f9",
+      "format": "tar.bz2",
+      "destination": "windows"
+    },
+    {
+      "name": "tbb",
+      "version": "2020.2",
+      "url": "https://api.anaconda.org/download/conda-forge/tbb/2020.2/win-64/tbb-2020.2-h2d74725_4.tar.bz2",
+      "sha256": "29f489e8c46f464550b56659756187dc7fe4508ab34ef484e49eff37f81b4796",
+      "format": "tar.bz2",
+      "destination": "windows"
+    },
+    {
+      "name": "tbb-devel",
+      "version": "2020.2",
+      "url": "https://api.anaconda.org/download/conda-forge/tbb-devel/2020.2/win-64/tbb-devel-2020.2-h2d74725_4.tar.bz2",
+      "sha256": "c03ed44b6c08807a8f6decb96dd7d28e6c7b0ab5342afd6dcb85e448ab2dbe2d",
+      "format": "tar.bz2",
+      "destination": "windows"
+    }
+  ]
+}

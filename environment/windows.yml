@@ -1,0 +1,21 @@
+name: phaselimiter-build
+channels:
+  - conda-forge
+  - nodefaults
+dependencies:
+  - python=3.11
+  # Keep CMake compatible with the zlib ABI used by these legacy packages.
+  - cmake=3.27.9
+  - ninja=1.12
+  - boost-cpp=1.82.0
+  - armadillo=12.6.2
+  - libpng=1.6.39
+  - libjpeg-turbo=2.1.5.1
+  - zlib=1.2.13
+  # The conda Windows FFmpeg build lacks the libmp3lame encoder.
+  # Use the bundled executable from the pinned PyPI wheel instead.
+  - pip
+  - pip:
+      - imageio-ffmpeg==0.6.0
+# IPP and legacy TBB come from the checksum-pinned SDK manifest, not a
+# solver-selected oneTBB or the discontinued Intel conda channel.

@@ -1,25 +1,20 @@
 #!/bin/bash
+set -euo pipefail
 
-echo 'run this script in root of phaselimiter repository'
-echo 'close xcode before run this script'
+repo_dir="$(cd "$(dirname "$0")/.." && pwd)"
+build_dir="$repo_dir/build/macos"
+cmake -S "$repo_dir" -B "$build_dir" -G Xcode -DBUILD_TESTING=OFF
+cmake --build "$build_dir" --config Release --parallel 2
 
-rm -rf CMakeFiles CMakeCache.txt deps/gflags/CMakeFiles \
-  && cmake -GXcode -DCMAKE_BUILD_TYPE=Release .
-
-xcodebuild \
-    -project phaselimiter.xcodeproj \
-    -configuration Release
-
+# Keep the legacy application/data location without copying build products
+# and third-party source trees into /etc/phaselimiter.
 sudo mkdir -p /etc/phaselimiter
-sudo cp -R ./* /etc/phaselimiter/
-sudo cp ./.python-version /etc/phaselimiter/
-
-(
-cd /etc/phaselimiter/
-sudo chmod +x bin/Release/*
-sudo cp bin/Release/* /usr/local/bin
-sudo chmod +x script/audio_detector
-sudo cp script/audio_detector /usr/local/bin/
-sudo chmod 777 ./
+for entry in resource script test_data .python-version LICENSE README.md Pipfile Pipfile.lock; do
+  sudo cp -R "$repo_dir/$entry" /etc/phaselimiter/
+done
+sudo cp -R "$repo_dir/packaging/licenses" /etc/phaselimiter/
+sudo cmake --install "$build_dir" --config Release --prefix /etc/phaselimiter
+sudo cmake --install "$build_dir" --config Release --prefix /usr/local
+sudo install -m 755 "$repo_dir/script/audio_detector" /usr/local/bin/audio_detector
+cd /etc/phaselimiter
 pyenv exec pipenv install
-)
