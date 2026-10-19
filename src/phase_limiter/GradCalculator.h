@@ -14,6 +14,7 @@
 #include <list>
 #include <immintrin.h>
 #include <random>
+#include <stdexcept>
 #include <map>
 #include <chrono>
 #include "tbb/tbb.h"
@@ -266,6 +267,7 @@ namespace phase_limiter {
                 if (temp_tasks.size()) {
                     std::cerr << "TaskGroup prepare failed" << std::endl;
                 }
+                prepareDependencies();
             };
             
             void addTask(const TaskType &task) {
@@ -278,115 +280,40 @@ namespace phase_limiter {
             
             template <class BeforeHook, class WaveInputFunc, class GradOutputFunc>
             TaskResult process(const BeforeHook &before_hook, const WaveInputFunc &wave_input_func, const GradOutputFunc &grad_output_func, bool serial = false, bool before_hook_only = false) {
-                typedef typename TaskGroupVector::iterator Iterator;
-                // gradに書き込む領域に被りが無いように2回に分けて処理を行う。
-                // 1回目は全体をもれなく一回だけ舐めることが保証されている。
-                // (これを利用して、まったく関係の無いメモリ書き込みなど、別タスクをやらせることが可能)
-                // gradはGradCalculatorがクリア済み
-                
-                // serial = true;
-                
-#if 0
-                注意: task_groupsの分け方が間違えてるかも (task_groups2の最後の要素が空になっていないかも)
-                // 分割統治法 (parallel_forより遅くなった)
-                // イメージ図
-                // 左と右を並行で処理し、最後に継ぎ目を処理する
-                // task_groups1[0] | task_groups1[1]
-                //          task_groups1[0] | task_groups2[1]
-                const std::function<void(int, int, int)> execute_div_conq = [this, &execute_div_conq, &before_hook, &wave_input_func, &grad_output_func](int channel, int bg_idx, int ed_idx) {
-                    constexpr int grain_size = 1;
-                    const int gap = ed_idx - bg_idx;
-                    const int center = (ed_idx + bg_idx) / 2;
-                    if (gap <= grain_size) {
-                        // 一個目
-                        before_hook(&task_groups1[channel * task_groups1.size() / 2 + bg_idx]);
-                        task_groups1[channel * task_groups1.size() / 2 + bg_idx].doTask(wave_input_func, grad_output_func);
-                        
-                        // 二個目以降は継ぎ目も処理する
-                        for (int i = bg_idx + 1; i < ed_idx; i++) {
-                            before_hook(&task_groups1[channel * task_groups1.size() / 2 + i]);
-                            task_groups1[channel * task_groups1.size() / 2 + i].doTask(wave_input_func, grad_output_func);
-                            task_groups2[channel * task_groups2.size() / 2 + i - 1].doTask(wave_input_func, grad_output_func);
-                        }
-                    }
-                    else {
-#if 1
-                        tbb::parallel_invoke(std::bind(execute_div_conq, channel, bg_idx, center),
-                                             std::bind(execute_div_conq, channel, center, ed_idx));
-#else
-                        execute_div_conq(channel, bg_idx, center);
-                        execute_div_conq(channel, center, ed_idx);
-#endif
-                        // 継ぎ目
-                        task_groups2[channel * task_groups2.size() / 2 + (center - 1) ].doTask(wave_input_func, grad_output_func);
-                    }
-                };
-                tbb::parallel_invoke(std::bind(execute_div_conq, 0, 0, task_groups1.size() / 2),
-                                     std::bind(execute_div_conq, 1, 0, task_groups1.size() / 2));
-                //execute_div_conq(0, task_groups1.size());
-                
-#else
-                // 1回目のループを行う (全体をもれなく一回だけ舐める、before_hookあり)
-                const auto execute_with_before_hook = [&before_hook, &wave_input_func, &grad_output_func, before_hook_only](TaskGroupType *task_group) {
-                    before_hook(task_group);
-                    if (!before_hook_only) {
-                        task_group->doTask(wave_input_func, grad_output_func);
-                    }
-                };
-                if (serial) {
-                    for (auto &task_group: task_groups1) {
-                        execute_with_before_hook(&task_group);
-                    }
+                if (use_dependencies_ && !serial && !before_hook_only) {
+                    processDependencies(before_hook, wave_input_func, grad_output_func);
                 } else {
-                    // task_groups1の0番目は
-                    
-#if 0
-                    tbb::parallel_for(0, (int)task_groups1.size(),
-                                      [this, &execute_with_before_hook](int i) {
-                                          execute_with_before_hook(&task_groups1[i]);
-                                      }
-                                      );
-#else
-                    tbb::parallel_for(tbb::blocked_range<Iterator>(task_groups1.begin(), task_groups1.end()),
-                                  [&execute_with_before_hook](const tbb::blocked_range<Iterator>& r) {
-                                      for(auto it = r.begin(); it != r.end(); ++it) {
-                                          execute_with_before_hook(&(*it));
-                                      }
-                                  }
-                             );
-#endif
-                }
-                
-                // 2回目のループを行う (つぎはぎ部分、before_hookなし)
-                if (!before_hook_only) {
-                    const auto execute_without_before_hook = [&wave_input_func, &grad_output_func](TaskGroupType *task_group) {
-                        task_group->doTask(wave_input_func, grad_output_func);
+                    // The serial/hook-only and internal oversampling paths retain
+                    // the original two phases and their global barrier.
+                    const auto interior = [&](TaskGroupType &group) {
+                        before_hook(&group);
+                        if (!before_hook_only) group.doTask(wave_input_func, grad_output_func);
                     };
                     if (serial) {
-                        for (auto &task_group: task_groups2) {
-                            execute_without_before_hook(&task_group);
-                        }
+                        for (auto &group: task_groups1) interior(group);
                     } else {
-#if 0
-                        tbb::parallel_for(0, (int)task_groups2.size(),
-                        [this, &execute_without_before_hook](int i) {
-                            execute_without_before_hook(&task_groups2[i]);
+                        tbb::parallel_for(tbb::blocked_range<size_t>(0, task_groups1.size()),
+                            [&](const tbb::blocked_range<size_t> &range) {
+                                for (size_t a = range.begin(); a != range.end(); ++a)
+                                    interior(task_groups1[a]);
+                            });
+                    }
+                    if (!before_hook_only) {
+                        if (serial) {
+                            for (auto &group: task_groups2)
+                                group.doTask(wave_input_func, grad_output_func);
+                        } else {
+                            tbb::parallel_for(tbb::blocked_range<size_t>(0, task_groups2.size()),
+                                [&](const tbb::blocked_range<size_t> &range) {
+                                    for (size_t b = range.begin(); b != range.end(); ++b)
+                                        task_groups2[b].doTask(wave_input_func, grad_output_func);
+                                });
                         }
-                        );
-#else
-                        tbb::parallel_for(tbb::blocked_range<Iterator>(task_groups2.begin(), task_groups2.end()),
-                                      [&execute_without_before_hook](const tbb::blocked_range<Iterator>& r) {
-                                          for(auto it = r.begin(); it != r.end(); ++it) {
-                                              execute_without_before_hook(&(*it));
-                                          }
-                                      }
-                        );
-#endif
                     }
                 }
-                
-#endif
-                
+
+                // Preserve the original floating-point reduction order regardless
+                // of task completion order.
                 TaskResult result = { 0 };
                 if (!before_hook_only) {
                     for (const auto &task_group: task_groups1) {
@@ -404,6 +331,71 @@ namespace phase_limiter {
             }
             
         private:
+            void prepareDependencies() {
+                use_dependencies_ = tasks[0]->calculator->oversample() == 1;
+                successors_.clear();
+                predecessor_counts_.clear();
+                remaining_.reset();
+                if (!use_dependencies_) return;
+
+                successors_.resize(task_groups1.size());
+                predecessor_counts_.assign(task_groups2.size(), 0);
+                remaining_.reset(new std::atomic<int>[task_groups2.size()]);
+                for (size_t b = 0; b < task_groups2.size(); ++b) {
+                    const auto &boundary = task_groups2[b];
+                    for (size_t a = 0; a < task_groups1.size(); ++a) {
+                        const auto &interior = task_groups1[a];
+                        // Wait for every overlapping update/gradient write on this
+                        // channel. Do not assume that group indices are adjacent.
+                        if (interior.channel == boundary.channel &&
+                            interior.bg < boundary.ed && boundary.bg < interior.ed) {
+                            successors_[a].push_back(b);
+                            ++predecessor_counts_[b];
+                        }
+                    }
+                    if (predecessor_counts_[b] == 0)
+                        throw std::logic_error("boundary without a predecessor");
+                }
+            }
+
+            template <class BeforeHook, class WaveInputFunc, class GradOutputFunc>
+            void processDependencies(const BeforeHook &before_hook, const WaveInputFunc &wave_input_func,
+                                     const GradOutputFunc &grad_output_func) {
+                for (size_t b = 0; b < task_groups2.size(); ++b)
+                    remaining_[b].store(predecessor_counts_[b], std::memory_order_relaxed);
+                tbb::task_group pending;
+                try {
+                    // Retain the original interior granularity and update/FFT fusion.
+                    tbb::parallel_for(tbb::blocked_range<size_t>(0, task_groups1.size()),
+                        [&](const tbb::blocked_range<size_t> &range) {
+                            for (size_t a = range.begin(); a != range.end(); ++a) {
+                                auto &group = task_groups1[a];
+                                before_hook(&group);
+                                group.doTask(wave_input_func, grad_output_func);
+                                for (size_t b: successors_[a]) {
+                                    // Publish this predecessor's writes and acquire all
+                                    // earlier predecessors before scheduling the boundary.
+                                    if (remaining_[b].fetch_sub(1, std::memory_order_acq_rel) == 1)
+                                        pending.run([&, b] {
+                                            task_groups2[b].doTask(wave_input_func, grad_output_func);
+                                        });
+                                }
+                            }
+                        });
+                    pending.wait();
+                } catch (...) {
+                    // No task may outlive the hooks/buffers captured by reference,
+                    // including when an interior task throws after queuing work.
+                    pending.cancel();
+                    pending.wait();
+                    throw;
+                }
+            }
+
+            bool use_dependencies_ = false;
+            std::vector<std::vector<size_t>> successors_;
+            std::vector<int> predecessor_counts_;
+            std::unique_ptr<std::atomic<int>[]> remaining_;
             tbb::cache_aligned_allocator<TaskType> task_allocator_;
             tbb::cache_aligned_allocator<TaskGroupType> task_group_allocator_;
             TaskGroupVector task_groups1;

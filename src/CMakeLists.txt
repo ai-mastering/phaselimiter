@@ -143,6 +143,7 @@ if(BUILD_TESTING)
     test/example.cpp
     test/fir_filter_bank.cpp
     test/fir_resample_filter.cpp
+    test/grad_tasks.cpp
     test/lof.cpp
     test/loudness.cpp
     test/main.cpp

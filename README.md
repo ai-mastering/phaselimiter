@@ -18,6 +18,13 @@ The limiter and automated mastering engine used by Onatsu Bakuage-kun.
 - Results: using the median across three seeds for each excerpt, CMA-ES ranked first on 11 of 12 excerpts at 10,000 evaluations; jDE won on the remaining glockenspiel excerpt. CMA-ES's worst rank was a tie for third. On 11 excerpts, even its worst seed outperformed the current optim's best seed. At 500–1,000 evaluations, however, NLopt ranked first on all 12 excerpts. Every dlib trial on the additional excerpts reached the 300-second timeout, so dlib was excluded from rankings at equal evaluation budgets.
 - These are practical configurations: the current optim retains its original unbounded search, while the other solvers share a bounded, normalized search domain. With only three trials per excerpt, the results do not establish general superiority, convergence to a global optimum, or perceived audio quality.
 
+## Phase limiter parallelization
+
+The limiter schedules boundary FFT work as soon as its overlapping interior
+regions finish. See the [parallelization research notes](docs/phase-limiter-parallelization.md)
+(in Japanese) for the implementation, benchmark comparisons, source FFT cache
+tradeoffs, and reproduction instructions.
+
 ## project status
 
 inactive
