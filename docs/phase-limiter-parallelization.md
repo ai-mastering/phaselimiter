@@ -18,8 +18,8 @@
 - FFT窓、区間幅、計算回数、FISTA/prox更新とFFTの融合、波形バッファ構成を維持する。
 - 評価値・内積・ノルムの集計順序、各サンプルへの勾配加算順序を維持する。
 - 実験用の環境変数や方式切替フラグは本実装には設けない。
-- `perf_src_cache` の既定値は従来の `true` のまま。今回の高速な条件を使うには
-  `--perf_src_cache=false` を明示する。既定値の変更はこのスケジューリング変更に含めない。
+- 追試結果を踏まえ、`perf_src_cache` の既定値を `true` から `false` に変更した。
+  原音FFTキャッシュを使う場合は `--perf_src_cache=true` を明示する。
 
 対象コードは [GradCalculator.h](../src/phase_limiter/GradCalculator.h)、
 回帰テストは [grad_tasks.cpp](../src/test/grad_tasks.cpp) にある。
@@ -184,7 +184,8 @@ cache=trueのまま1／2スレッドでも測定した（各3回）。
 ## `perf_src_cache` の比較
 
 このオプションは原音への窓掛け＋順FFT結果を保持して再利用する。
-`false` はそれを毎回計算する。CLIの古いヘルプにはIFFTと書かれているが、対象コードは `dft->Forward` である。
+`false` はそれを毎回計算する。対象コードは `dft->Forward` であり、
+既定値の変更に合わせてCLIヘルプの旧表記「IFFT」も「FFT」に修正した。
 
 60秒入力で、1／2スレッドは各3回、16／32は各5回。キャッシュ有無と方式を交互に測った。
 

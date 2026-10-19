@@ -117,7 +117,7 @@ DEFINE_double(absolute_min_noise, 1e-6, "absolute min noise (independent from no
 DEFINE_int32(max_iter1, 100, "max optimization iteration count (outer loop)");
 DEFINE_int32(max_iter2, 400, "max optimization iteration count (inner loop)");
 
-DEFINE_bool(perf_src_cache, true, "use IFFT of src wave cache (performance option)");
+DEFINE_bool(perf_src_cache, false, "cache source waveform FFT results (performance option)");
 
 DEFINE_string(ffmpeg, "ffmpeg", "ffmpeg executable path.");
 
