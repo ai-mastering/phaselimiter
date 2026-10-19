@@ -20,6 +20,24 @@ add_executable(audio_analyzer
 target_link_libraries(audio_analyzer PRIVATE phaselimiter_cli)
 phaselimiter_enable_warnings(audio_analyzer)
 
+# Legacy detect2 compatibility; deliberately independent of bakuage DSP,
+# HNSW, IPP, and sound_quality2.
+add_library(classic_detector STATIC
+  classic_detector/data.cpp
+  classic_detector/detection.cpp
+  classic_detector/numpy_neighbors.cpp)
+target_include_directories(classic_detector PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}")
+target_include_directories(classic_detector SYSTEM PUBLIC "${PROJECT_SOURCE_DIR}/deps/eigen")
+target_include_directories(classic_detector PRIVATE "${PROJECT_SOURCE_DIR}/deps/picojson")
+target_link_libraries(classic_detector PUBLIC phaselimiter_options PRIVATE Boost::filesystem)
+phaselimiter_enable_warnings(classic_detector)
+
+add_executable(audio_detector audio_detector/main.cpp)
+target_link_libraries(audio_detector PRIVATE classic_detector gflags::gflags)
+phaselimiter_enable_warnings(audio_detector)
+install(FILES "${PROJECT_SOURCE_DIR}/packaging/licenses/numpy.txt"
+  DESTINATION "${CMAKE_INSTALL_DATADIR}/phaselimiter/licenses")
+
 add_executable(phase_limiter
   phase_limiter/auto_mastering.cpp
   phase_limiter/auto_mastering2.cpp
@@ -62,7 +80,7 @@ add_executable(effect_test
 target_link_libraries(effect_test PRIVATE phaselimiter_cli)
 phaselimiter_enable_warnings(effect_test)
 
-set(phaselimiter_tools snd_file_info audio_analyzer phase_limiter spectrogram
+set(phaselimiter_tools snd_file_info audio_analyzer audio_detector phase_limiter spectrogram
   audio_visualizer clear_mixer effect_test)
 if(UNIX AND NOT APPLE)
   set_target_properties(${phaselimiter_tools} PROPERTIES INSTALL_RPATH "$ORIGIN/../${CMAKE_INSTALL_LIBDIR}")
@@ -90,6 +108,14 @@ if(BUILD_TESTING)
     "-DTOOL=$<TARGET_FILE:snd_file_info>"
     "-DINPUT=${PROJECT_SOURCE_DIR}/test_data/test2.wav"
     -P "${PROJECT_SOURCE_DIR}/cmake/TestSndFileInfo.cmake")
+
+  add_executable(classic_detector_tests test/classic_detector.cpp)
+  target_link_libraries(classic_detector_tests PRIVATE classic_detector gtest_main Boost::filesystem)
+  phaselimiter_enable_warnings(classic_detector_tests)
+  add_test(NAME classic-detector-unit COMMAND classic_detector_tests)
+  add_test(NAME audio-detector-cli COMMAND "${Python3_EXECUTABLE}"
+    "${PROJECT_SOURCE_DIR}/script/test_audio_detector.py"
+    "--tool=$<TARGET_FILE:audio_detector>")
 
   # CTest reserves the target name "test" (including Ninja executable aliases).
   add_executable(phaselimiter_tests

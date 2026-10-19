@@ -39,9 +39,11 @@ https://github.com/ai-mastering/phaselimiter/releases
 
 ## runtime dependencies
 
-- pipenv (python 3)
 - ffmpeg (command line program)
 - system audio/image libraries (libsndfile, libpng, zlib and their codec dependencies)
+
+Native tools require neither Python nor Pipenv. Development and release tooling
+uses Python 3.
 
 `phase_limiter --disable_input_encode` requires a stereo WAV at 44.1 kHz;
 other channel counts or sample rates are rejected before processing. With input
@@ -195,9 +197,21 @@ cmake --preset release \
 ctest --preset release
 ```
 
+### Datasets
+
+- [`bakuage_dataset1/analysis_shortpath`](https://github.com/ai-mastering/bakuage_dataset1)
+  is the larger analysis dataset used for sound_quality2 cache generation and
+  dataset validation. The cache is used by `audio_analyzer` and `mastering5`.
+  CI fetches the commit pinned in `environment/dataset.json`.
+- `resource/analysis_data` is the smaller bundled dataset. Its
+  `resource/detection_preparation*.json` files define the general/pop/jazz/classical
+  reference sets and pairwise distances for legacy `detect2` reference selection.
+  The bundled JSONs also support small sound_quality2 test caches; they are
+  separate from the larger external dataset.
+
 The Ruby specs accept the binary directory explicitly; they do not need an
 install into the source tree. CI uses the separately locked test/lint gems in
-`environment/Gemfile` (the historical application Gemfile is unchanged):
+`environment/Gemfile`:
 
 ```sh
 export BUNDLE_GEMFILE="$PWD/environment/Gemfile"
@@ -209,7 +223,7 @@ python3 -B -m unittest discover -s tests/build -v
 ```
 
 CTest's CLI smoke check reads the bundled WAV using `snd_file_info` and checks
-its JSON metadata. It replaces the old empty `build_test` program.
+its JSON metadata.
 
 ### Install and package
 
@@ -217,7 +231,7 @@ its JSON metadata. It replaces the old empty `build_test` program.
 cmake --install build/release --config Release --prefix /your/install/prefix
 ```
 
-This installs the seven CLI tools. Windows installation resolves DLL imports,
+This installs the eight CLI tools. Windows installation resolves DLL imports,
 including transitive DLL dependencies, using the active conda environment,
 configured SDK prefixes, and `PHASELIMITER_RUNTIME_DIRS` when extra search paths
 are needed. Windows system DLLs are excluded. The target machine needs the
@@ -237,11 +251,19 @@ python3 script/package_release.py --stage-dir build/stage/linux \
 
 Use a `.zip` output for Windows. Both archive formats retain a `phaselimiter/`
 root. Staging uses `packaging/release_files.txt` and `packaging/licenses`.
+Archives contain native tools, runtime libraries, resources, README, and licenses.
+Development scripts and test audio remain in the source repository and are not
+distributed. Legacy Python/Pipenv manifests have been removed. No Python or
+Pipenv setup is needed on the target machine.
 It deliberately excludes any old `resource/sound_quality2_cache` in the source
 tree; supply a newly generated one with `--sound-quality-cache build/data/sound_quality2_cache`.
 Release stages reject nonempty destinations to avoid silently retaining stale
 binaries. Neither staging nor archiving modifies the original resources.
-`script/install_mac.sh` still supports the existing `/etc/phaselimiter` layout.
+`bash script/install_linux.sh build/artifacts/release.tar.xz` installs a generated
+native Linux archive into `/etc/phaselimiter` and copies its executables into
+`/usr/local/bin`. The installer no longer downloads the historical Python release.
+`script/install_mac.sh` builds from source and supports the same
+`/etc/phaselimiter` layout.
 
 ### CI
 
@@ -298,3 +320,64 @@ not validate those complete environments.
 
 CMake references: [presets](https://cmake.org/cmake/help/v3.23/manual/cmake-presets.7.html)
 and [imported targets](https://cmake.org/cmake/help/v3.23/guide/importing-exporting/index.html).
+
+
+## Audio detector
+
+`audio_detector` implements the legacy Python `detect2` task in C++. It accepts
+an `audio_analyzer` analysis JSON and selects a classic mastering reference:
+
+```sh
+build/release/bin/audio_detector detect2 \
+  --source input_analysis.json \
+  --detection_preparation resource/detection_preparation.json \
+  --neighbor_ratio 0.01 --outlier_ratio 0.1
+```
+
+`--task=detect2` is also accepted. Stdout contains the original result JSON:
+`lof`, `border_lof`, `sound_quality`, and the one-entry `ranking` with `path` and
+`lof`. Errors go to stderr with a nonzero exit status. The returned path is the
+unchanged preparation entry. General/pop/jazz/classical select different
+`resource/detection_preparation*.json` files; there is no genre classification.
+
+Defaults match the Python detector: neighbor ratio `0.03` and outlier ratio `0.1`.
+LOF distances absent from the cache use a fixed covariance regularization of
+`0.001`; final ranking uses the value stored in the preparation. The former Rails server explicitly used
+neighbor ratio `0.01`, as in the example. The preparation defaults to
+`./resource/detection_preparation.json`. Relative candidate paths are resolved
+beside the preparation, including bundled legacy `./resource/analysis_data/...`
+paths; the old working-directory-relative location is a fallback. Absolute paths
+are used verbatim. This also supports anonymous `./analysis_data/000001.json`
+entries without rewriting the preparation or depending on the working directory.
+
+The independent `src/classic_detector` module uses `bands_short` and
+`covariance_short`, subtracts overall loudness from Mid/Side means, and reproduces
+scikit-learn 0.19.1 / SciPy 1.0.1 / NumPy 1.14.3 behavior. This includes the
+symmetric Gaussian KL distance, brute-force LOF, neighbor tie ordering, the
+rounded-first-mean distance-cache shortcut, percentile interpolation, and the
+old score formula. NumPy's specialized selection/sort code is included under its
+BSD license. Degenerate scores retain Python's `NaN`/`Infinity` JSON extensions.
+It does not use project DSP, HNSW, sound_quality2, or a Python runtime. It rebuilds
+the LOF state on each invocation rather than reading or writing Python pickle
+caches. Audio analysis, phase_limiter invocation, and output-level decisions stay
+with the caller. Only `detect2` is supported; existing preparation files are
+shipped rather than regenerated by this executable.
+
+
+### Detector origin and historical tooling
+
+The C++ detector ports `detect2` from the former `script/create_reference.py`.
+The original Python implementation, shell launcher, pinned Python dependencies,
+preparation generator, and dataset anonymization helpers are preserved in Git at
+commit [`078175aaf169e74ed0b1407ad392cbed8b58cd03`](https://github.com/ai-mastering/phaselimiter/tree/078175aaf169e74ed0b1407ad392cbed8b58cd03).
+They were removed from the current tree after the native replacement was verified.
+To inspect the original implementation locally:
+
+```sh
+git show 078175aaf169e74ed0b1407ad392cbed8b58cd03:script/create_reference.py
+```
+
+The lockfile in that revision records NumPy 1.14.3, SciPy 1.0.1, and
+scikit-learn 0.19.1, which define the detector compatibility target. Legacy Ruby
+experiment scripts and their root Gemfile are also available in that revision;
+current Ruby tests use `environment/Gemfile`.

@@ -1,8 +1,12 @@
 """Contracts for SDK integrity and release layout; no native compiler required."""
 import hashlib
 import importlib.util
+import io
+import os
 from pathlib import Path
 import sys
+import shutil
+import subprocess
 import tarfile
 import tempfile
 import unittest
@@ -40,6 +44,31 @@ class ReleaseContracts(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, 'Checksum mismatch'):
                 fetcher.fetch(asset, cache)
 
+    @unittest.skipUnless(sys.platform.startswith('linux') and shutil.which('bash')
+                         and shutil.which('xz'), 'requires Linux installer tools')
+    def test_linux_installer_rejects_python_only_releases_before_installing(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            archive = root / 'old release.tar.xz'
+            with tarfile.open(archive, 'w:xz') as package:
+                launcher = b'#!/bin/sh\npython script/create_reference.py "$@"\n'
+                info = tarfile.TarInfo('phaselimiter/script/audio_detector')
+                info.size = len(launcher)
+                package.addfile(info, io.BytesIO(launcher))
+            tools = root / 'tools'
+            tools.mkdir()
+            sudo = tools / 'sudo'
+            sudo.write_text('#!/bin/sh\necho invoked > "$SUDO_LOG"\nexit 99\n')
+            sudo.chmod(0o755)
+            log = root / 'sudo.log'
+            environment = dict(os.environ, PATH=str(tools) + os.pathsep + os.environ['PATH'],
+                               SUDO_LOG=str(log))
+            result = subprocess.run(['bash', str(REPO / 'script/install_linux.sh'), str(archive)],
+                                    env=environment, capture_output=True, text=True)
+            self.assertNotEqual(0, result.returncode)
+            self.assertIn('native bin/audio_detector', result.stderr)
+            self.assertFalse(log.exists())
+
     def test_stage_does_not_import_source_cache_and_archives_preserve_layout(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -48,7 +77,15 @@ class ReleaseContracts(unittest.TestCase):
             (repo / 'packaging/licenses').mkdir(parents=True)
             (repo / 'resource').mkdir()
             (repo / 'packaging/release_files.txt').write_text(
-                'phaselimiter/bin\nphaselimiter/lib\nphaselimiter/resource\nphaselimiter/licenses\n')
+                (REPO / 'packaging/release_files.txt').read_text())
+            (repo / 'LICENSE').write_text('project license')
+            (repo / 'README.md').write_text('documentation')
+            (repo / 'Pipfile').write_text('legacy dependency manifest')
+            (repo / 'Pipfile.lock').write_text('legacy lockfile')
+            (repo / '.python-version').write_text('3.6')
+            (repo / 'script/create_reference.py').write_text('import sklearn')
+            (repo / 'test_data').mkdir()
+            (repo / 'test_data/input.wav').write_bytes(b'test audio')
             (repo / 'packaging/licenses/notice.txt').write_text('license')
             (repo / 'resource/reference.json').write_text('{}')
             (repo / 'resource/sound_quality2_cache').write_text('stale source cache')
@@ -60,6 +97,7 @@ class ReleaseContracts(unittest.TestCase):
                 prefix = Path(command[command.index('--prefix') + 1])
                 (prefix / 'bin').mkdir(parents=True)
                 (prefix / 'bin/phase_limiter').write_text('installed executable')
+                (prefix / 'bin/audio_detector').write_text('native detector')
                 (prefix / 'lib').mkdir()
                 (prefix / 'lib/runtime.so').write_text('installed runtime')
 
@@ -77,7 +115,12 @@ class ReleaseContracts(unittest.TestCase):
             self.assertEqual((repo / 'resource/sound_quality2_cache').read_text(), 'stale source cache')
             self.assertEqual((prefix / 'licenses/notice.txt').read_text(), 'license')
             self.assertTrue((prefix / 'lib/runtime.so').exists())
-            expected = {'phaselimiter/bin/phase_limiter', 'phaselimiter/lib/runtime.so',
+            for entry in ['script', 'test_data', 'Pipfile', 'Pipfile.lock', '.python-version']:
+                self.assertFalse((prefix / entry).exists(), entry)
+                self.assertTrue((repo / entry).exists(), entry)
+
+            expected = {'phaselimiter/bin/phase_limiter', 'phaselimiter/bin/audio_detector',
+                        'phaselimiter/lib/runtime.so',
                         'phaselimiter/resource/reference.json', 'phaselimiter/resource/sound_quality2_cache',
                         'phaselimiter/licenses/notice.txt'}
             with self.assertRaisesRegex(ValueError, 'outside the staging'):
@@ -93,6 +136,9 @@ class ReleaseContracts(unittest.TestCase):
                         entries = set(package.getnames())
                 self.assertTrue(expected <= entries)
                 self.assertFalse(any('/source/' in entry or '/build/' in entry for entry in entries))
+                self.assertFalse(any('/script/' in entry or '/test_data/' in entry for entry in entries))
+                self.assertFalse(any(Path(entry).name in {'Pipfile', 'Pipfile.lock', '.python-version'}
+                                     for entry in entries))
 
 
 if __name__ == '__main__':
