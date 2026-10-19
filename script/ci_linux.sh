@@ -21,9 +21,6 @@ cmake --build "$build_dir" --parallel 2
 ctest --test-dir "$build_dir" --output-on-failure
 
 if [ "$configuration" = Release ]; then
-  export PHASELIMITER_BIN_DIR="$PWD/$build_dir/bin"
-  bundle exec rubocop --lint
-  bundle exec rspec
   python3 -B -m unittest discover -s tests/build -v
   mkdir -p build/data build/artifacts
   "$build_dir/bin/audio_analyzer" --mode=sound_quality2_preparation \

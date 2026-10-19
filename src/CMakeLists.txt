@@ -104,6 +104,19 @@ if(BUILD_TESTING)
     "${PROJECT_SOURCE_DIR}/script/test_limiter_io.py"
     "--tool=$<TARGET_FILE:phase_limiter>")
 
+  # The former RSpec suite ran in Release CI only.
+  if(CMAKE_BUILD_TYPE STREQUAL "Release" OR CMAKE_CONFIGURATION_TYPES)
+    set(cli_regression_configurations)
+    if(CMAKE_CONFIGURATION_TYPES)
+      set(cli_regression_configurations CONFIGURATIONS Release)
+    endif()
+    add_test(NAME cli-regression COMMAND "${Python3_EXECUTABLE}"
+      "${PROJECT_SOURCE_DIR}/script/test_cli_regression.py"
+      "--bin-dir=$<TARGET_FILE_DIR:phase_limiter>" -v
+      ${cli_regression_configurations})
+    set_tests_properties(cli-regression PROPERTIES TIMEOUT 900)
+  endif()
+
   add_test(NAME cli-smoke COMMAND "${CMAKE_COMMAND}"
     "-DTOOL=$<TARGET_FILE:snd_file_info>"
     "-DINPUT=${PROJECT_SOURCE_DIR}/test_data/test2.wav"

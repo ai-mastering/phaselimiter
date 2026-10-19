@@ -3,7 +3,5 @@
 !Dockerfile
 !environment/
 !environment/dependencies.json
-!environment/Gemfile
-!environment/Gemfile.lock
 !script/
 !script/fetch_build_dependencies.py

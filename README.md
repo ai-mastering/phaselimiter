@@ -209,16 +209,13 @@ ctest --preset release
   The bundled JSONs also support small sound_quality2 test caches; they are
   separate from the larger external dataset.
 
-The Ruby specs accept the binary directory explicitly; they do not need an
-install into the source tree. CI uses the separately locked test/lint gems in
-`environment/Gemfile`:
+The CLI regression tests use Python's standard-library `unittest`. They cover
+limiter smoke cases, decoded frame counts across AAC/MP3/WAV conversions, and
+audio_analyzer reference values. CTest runs them in Release builds, matching
+the former RSpec suite. They can also be run directly against any build:
 
 ```sh
-export BUNDLE_GEMFILE="$PWD/environment/Gemfile"
-export BUNDLE_PATH="$PWD/build/gems"
-bundle install
-PHASELIMITER_BIN_DIR="$PWD/build/release/bin" bundle exec rspec
-bundle exec rubocop --lint
+python3 -B script/test_cli_regression.py --bin-dir build/release/bin -v
 python3 -B -m unittest discover -s tests/build -v
 ```
 
@@ -268,8 +265,8 @@ native Linux archive into `/etc/phaselimiter` and copies its executables into
 ### CI
 
 GitHub Actions is the only CI configuration. `script/ci_linux.sh` builds
-Release and Debug, runs CTest, and for Release runs Ruby specs, read-only lint,
-packaging tests, CLI integration and staging. Dataset-based validation uses the
+Release and Debug, runs CTest (including CLI regression tests in Release), and
+for Release runs packaging tests, CLI integration and staging. Dataset-based validation uses the
 commit pinned in `environment/dataset.json`; checkout and generated caches live
 under `build/`. Benchmark, historical regression-sweep, and valgrind jobs use
 `script/ci_checks.py`. Failures propagate to CI; no benchmark errors are ignored.
@@ -379,5 +376,5 @@ git show 078175aaf169e74ed0b1407ad392cbed8b58cd03:script/create_reference.py
 
 The lockfile in that revision records NumPy 1.14.3, SciPy 1.0.1, and
 scikit-learn 0.19.1, which define the detector compatibility target. Legacy Ruby
-experiment scripts and their root Gemfile are also available in that revision;
-current Ruby tests use `environment/Gemfile`.
+experiment scripts and their root Gemfile are also available in that revision.
+The remaining RSpec tests have since been migrated to Python/CTest.
