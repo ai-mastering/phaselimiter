@@ -256,11 +256,9 @@ It deliberately excludes any old `resource/sound_quality2_cache` in the source
 tree; supply a newly generated one with `--sound-quality-cache build/data/sound_quality2_cache`.
 Release stages reject nonempty destinations to avoid silently retaining stale
 binaries. Neither staging nor archiving modifies the original resources.
-`bash script/install_linux.sh build/artifacts/release.tar.xz` installs a generated
-native Linux archive into `/etc/phaselimiter` and copies its executables into
-`/usr/local/bin`. The installer no longer downloads the historical Python release.
-`script/install_mac.sh` builds from source and supports the same
-`/etc/phaselimiter` layout.
+Extract the archive and run tools directly from `phaselimiter/bin/`.
+Keep the extracted directory layout intact so executables can find the bundled
+libraries in `phaselimiter/lib/`.
 
 ### CI
 

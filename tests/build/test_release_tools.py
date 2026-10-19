@@ -1,12 +1,8 @@
 """Contracts for SDK integrity and release layout; no native compiler required."""
 import hashlib
 import importlib.util
-import io
-import os
 from pathlib import Path
 import sys
-import shutil
-import subprocess
 import tarfile
 import tempfile
 import unittest
@@ -43,31 +39,6 @@ class ReleaseContracts(unittest.TestCase):
             downloaded.write_bytes(b'corrupted SDK')
             with self.assertRaisesRegex(ValueError, 'Checksum mismatch'):
                 fetcher.fetch(asset, cache)
-
-    @unittest.skipUnless(sys.platform.startswith('linux') and shutil.which('bash')
-                         and shutil.which('xz'), 'requires Linux installer tools')
-    def test_linux_installer_rejects_python_only_releases_before_installing(self):
-        with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
-            archive = root / 'old release.tar.xz'
-            with tarfile.open(archive, 'w:xz') as package:
-                launcher = b'#!/bin/sh\npython script/create_reference.py "$@"\n'
-                info = tarfile.TarInfo('phaselimiter/script/audio_detector')
-                info.size = len(launcher)
-                package.addfile(info, io.BytesIO(launcher))
-            tools = root / 'tools'
-            tools.mkdir()
-            sudo = tools / 'sudo'
-            sudo.write_text('#!/bin/sh\necho invoked > "$SUDO_LOG"\nexit 99\n')
-            sudo.chmod(0o755)
-            log = root / 'sudo.log'
-            environment = dict(os.environ, PATH=str(tools) + os.pathsep + os.environ['PATH'],
-                               SUDO_LOG=str(log))
-            result = subprocess.run(['bash', str(REPO / 'script/install_linux.sh'), str(archive)],
-                                    env=environment, capture_output=True, text=True)
-            self.assertNotEqual(0, result.returncode)
-            self.assertIn('native bin/audio_detector', result.stderr)
-            self.assertFalse(log.exists())
 
     def test_stage_does_not_import_source_cache_and_archives_preserve_layout(self):
         with tempfile.TemporaryDirectory() as directory:
