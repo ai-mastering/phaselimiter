@@ -55,8 +55,11 @@ namespace bakuage {
             output_buffer_pos_ = 0;
         }
         
+        // Expose Clock's FFT block size for callers that stream their input.
+        int max_process_len() const { return extended_size() - fir_size() + 1; }
+
         void Clock(const Float *bg, const Float *ed, Float *output) {
-            const int max_process_len = extended_size() - fir_size() + 1;
+            const int max_process_len = this->max_process_len();
             while (ed - bg > max_process_len) {
                 DoClock(bg, bg + max_process_len, output);
                 bg += max_process_len;

@@ -644,18 +644,24 @@ namespace phase_limiter {
                 std::mt19937 engine(1);
                 std::normal_distribution<double> dist(0.0, 1.0);
                 const double scale_1db = std::pow(10, 1.0 / 20);
-                bakuage::RealDft<Float> dft(memLen);
-                bakuage::AlignedPodVector<std::complex<Float>> spec(memLen / 2 + 1);
+                // Only the cut-spectrum modes use a whole-wave FFT. The final
+                // noise evaluation must not allocate its unused FFT and spectrum.
+                std::unique_ptr<bakuage::RealDft<Float>> dft;
+                bakuage::AlignedPodVector<std::complex<Float>> spec;
+                if (mode == "src_with_cut" || mode == "noise_with_cut") {
+                    dft.reset(new bakuage::RealDft<Float>(memLen));
+                    spec.resize(memLen / 2 + 1);
+                }
                 for (int channel = 0; channel < 2; channel++) {
                     if (mode == "src_with_cut") {
-                        dft.Forward(waveSrc[channel], (Float *)spec.data());
+                        dft->Forward(waveSrc[channel], (Float *)spec.data());
                         for (int i = 0; i < spec.size(); i++) {
                             const auto freq = 1.0 * i / spec.size() * sample_rate();
                             if (freq > max_available_freq()) {
                                 spec[i] = 0;
                             }
                         }
-                        dft.Backward((Float *)spec.data(), waveSrc[channel]);
+                        dft->Backward((Float *)spec.data(), waveSrc[channel]);
                         const double scale = 1.0 / memLen;
                         for (int i = 0; i < memLen; i++) {
                             waveSrc[channel][i] *= scale;
@@ -672,9 +678,9 @@ namespace phase_limiter {
                                 spec[i].imag(0);
                             }
                         }
-                        dft.Backward((Float *)spec.data(), waveSrc[channel]);
+                        dft->Backward((Float *)spec.data(), waveSrc[channel]);
                         bakuage::VectorMulConstantInplace(scale_1db, spec.data(), spec.size());
-                        dft.Backward((Float *)spec.data(), waveOut[channel]);
+                        dft->Backward((Float *)spec.data(), waveOut[channel]);
                     } else if (mode == "noise") { // リミッター誤差導入時から使っているもの
                         for (int i = 0; i < memLen; i++) {
                             const double x = dist(engine);

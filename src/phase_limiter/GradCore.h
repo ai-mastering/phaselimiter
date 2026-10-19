@@ -204,9 +204,10 @@ private:
             void Reserve(int len) {
                 // 実数FFTの分も含む
                 // FFTの最後の項を処理するために2 * SimdType::length(8)を足している
-                windowed_.resize(std::max(windowed_.size(), len * sizeof(typename SimdType::element_type)));
-                spec_.resize(std::max(spec_.size(), (len + 2 * SimdType::length) * sizeof(typename SimdType::element_type)));
-                specSrc_.resize(std::max(specSrc_.size(), (len + 2 * SimdType::length) * sizeof(typename SimdType::element_type)));
+                // AlignedPodVector takes element counts, not byte counts.
+                windowed_.resize(std::max<size_t>(windowed_.size(), len));
+                spec_.resize(std::max<size_t>(spec_.size(), len + 2 * SimdType::length));
+                specSrc_.resize(std::max<size_t>(specSrc_.size(), len + 2 * SimdType::length));
             }
             
             bakuage::RealDft<Float> *GetDft(int len) { return dft_pool_->Get(len); }

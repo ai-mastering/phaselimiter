@@ -45,25 +45,27 @@ namespace phase_limiter {
             throw std::logic_error(message.str());
         }
         
-        std::vector<Float> buffer = wave;
-        // VectorSanitizeInplace accepts int lengths; process long files in chunks.
-        for (size_t offset = 0; offset < buffer.size();) {
-            const int count = static_cast<int>(std::min<size_t>(
-                buffer.size() - offset, std::numeric_limits<int>::max()));
-            bakuage::VectorSanitizeInplace<Float>(1e7, buffer.data() + offset, count);
+        // Sanitize bounded, whole-frame chunks rather than copying the full
+        // recording. SF_FORMAT_FLOAT conversion and sample order stay unchanged.
+        const size_t chunk_frames = std::min<size_t>(65536,
+            std::numeric_limits<int>::max() / static_cast<size_t>(channels));
+        std::vector<Float> buffer(std::min(frame_count, chunk_frames) * channels);
+        for (size_t offset = 0; offset < frame_count;) {
+            const size_t count = std::min(frame_count - offset, chunk_frames);
+            std::copy_n(wave.data() + offset * channels, count * channels, buffer.data());
+            bakuage::VectorSanitizeInplace<Float>(1e7, buffer.data(), static_cast<int>(count * channels));
+            sf_count_t written;
+            if (sizeof(Float) == 4) {
+                written = sf_writef_float(snd_file.get(), (float *)buffer.data(), count);
+            } else {
+                written = sf_writef_double(snd_file.get(), (double *)buffer.data(), count);
+            }
+            if (written != static_cast<sf_count_t>(count)) {
+                std::stringstream message;
+                message << "sf_writef_float error: " << written;
+                throw std::logic_error(message.str());
+            }
             offset += count;
-        }
-        
-        sf_count_t size;
-        if (sizeof(Float) == 4) {
-            size = sf_writef_float(snd_file.get(), (float *)buffer.data(), frames);
-        } else {
-            size = sf_writef_double(snd_file.get(), (double *)buffer.data(), frames);
-        }
-        if (size != frames) {
-            std::stringstream message;
-            message << "sf_writef_float error: " << size;
-            throw std::logic_error(message.str());
         }
         snd_file.CloseChecked();
     }

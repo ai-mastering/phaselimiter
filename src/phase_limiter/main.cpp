@@ -245,14 +245,17 @@ void PhaseLimitInplace(std::vector<Float> *wave) {
         ptr_array[0] = &(*wave)[0];
         ptr_array[1] = &(*wave)[1];
         calculator.copyWaveProxFrom(ptr_array, 2);
-        const auto eval = calculator.CalcEvalGradFromProx(FLAGS_noise_update_min_noise, unit_eval);
+        const bool need_grad = !FLAGS_grad_output.empty() || !FLAGS_limiting_error_spectrogram_output.empty();
+        const auto eval = need_grad
+            ? calculator.CalcEvalGradFromProx(FLAGS_noise_update_min_noise, unit_eval)
+            : calculator.CalcEvalFromProx(FLAGS_noise_update_min_noise, unit_eval);
         const auto normalized_eval = eval / (1e-37 + unit_eval);
         const auto limiting_error = 10 * std::log10(1.0 + normalized_eval * (std::pow(10, 0.1) - 1.0));
         std::cerr << "normalized_eval:" << normalized_eval <<
         "\tlimiting_error:" << limiting_error << std::endl;
         phase_limiter::GradCoreSettings::GetInstance().set_src_cache(FLAGS_perf_src_cache);
 
-        if (!FLAGS_grad_output.empty() || !FLAGS_limiting_error_spectrogram_output.empty()) {
+        if (need_grad) {
             // output limiting error spectrogram (一旦は簡易的にgradのspectrogramをffmpegで生成する)
             auto grad = *wave;
             ptr_array[0] = &grad[0];
@@ -462,12 +465,12 @@ void MainFunc() {
     const size_t end_frame_in_margin = range.end - range.margin_start;
     const size_t retained_samples = 2 * (range.margin_end - range.margin_start);
     phase_limiter::CheckDspSampleCount(retained_samples);
-    for (size_t i = range.margin_start; i < range.margin_end; ++i) {
-        for (size_t ch = 0; ch < 2; ++ch) {
-            wave[2 * (i - range.margin_start) + ch] = wave[2 * i + ch];
-        }
+    if (retained_samples != wave.size()) {
+        // Release the unselected audio before allocating DSP working buffers.
+        std::vector<Float> retained(wave.begin() + 2 * range.margin_start,
+                                    wave.begin() + 2 * range.margin_end);
+        wave.swap(retained);
     }
-    wave.resize(retained_samples);
 
 	// 整える
 	phase_limiter::CutLowAndHighFreq(&wave, 2, FLAGS_low_cut_freq / 44100, FLAGS_high_cut_freq / 44100);

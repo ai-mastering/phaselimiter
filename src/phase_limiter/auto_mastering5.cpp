@@ -1,4 +1,5 @@
 #include "phase_limiter/auto_mastering.h"
+#include "phase_limiter/fir_processing.h"
 
 #include <cmath>
 #include <iostream>
@@ -209,22 +210,39 @@ namespace phase_limiter {
         // ホワイトノイズをコンプレッサーで解析したラウドネスを比較する
         // -> いったんなしで、差分を出力してみて大きいなら考える。
         
+        // These inputs are invariant across optimization candidates.
+        struct BandInput {
+            Float rms_m;
+            Float rms_s;
+            Float total_loudness;
+            Float mid_to_side_loudness;
+        };
+        std::vector<BandInput> band_inputs(band_loudnesses.size() * band_count);
+        for (size_t block = 0; block < band_loudnesses.size(); ++block) {
+            for (int band = 0; band < band_count; ++band) {
+                const Float input_m = band_loudnesses[block][2 * band];
+                const Float input_s = band_loudnesses[block][2 * band + 1];
+                auto &input = band_inputs[block * band_count + band];
+                input.rms_m = std::pow(10, 0.1 * input_m);
+                input.rms_s = std::pow(10, 0.1 * input_s);
+                input.total_loudness = -0.691 + 10 * std::log10(input.rms_m + input.rms_s + 1e-37);
+                input.mid_to_side_loudness = input_s - input_m;
+            }
+        }
+
         // エフェクト適用シミュレーション (ms compressor filter)
-        const auto apply_effect = [](const Effect &effect, const Float *input, Float *output) {
+        const auto apply_effect = [](const Effect &effect, const BandInput *input, Float *output) {
             for (int i = 0; i < effect.band_effects.size(); i++) {
                 const auto &band_effect = effect.band_effects[i];
                 // static const float sqrt_0_5 = std::sqrt(0.5); // 元のMsCompressorFilterはmsにするときにこれをかけていた。誤差が問題になるなら考える
                 static const float log10_div_20 = std::log(10) / 20;
                 
-                Float input_m = input[2 * i + 0];
-                Float input_s = input[2 * i + 1];
-                Float rms_m = std::pow(10, 0.1 * input_m);
-                Float rms_s = std::pow(10, 0.1 * input_s);
-                
-                Float total_loudness = -0.691 + 10 * std::log10(rms_m + rms_s + 1e-37);
+                Float rms_m = input[i].rms_m;
+                Float rms_s = input[i].rms_s;
+                Float total_loudness = input[i].total_loudness;
                 Float mapped_loudness = band_effect.loudness_mapping(total_loudness);
                 
-                Float mid_to_side_loudness = input_s - input_m;
+                Float mid_to_side_loudness = input[i].mid_to_side_loudness;
                 Float side_gain = std::exp(log10_div_20 * (band_effect.ms_loudness_mapping(mid_to_side_loudness) - mid_to_side_loudness));
                 
                 Float total_loudness_with_side_gain = -0.691 + 10 * std::log10(rms_m + rms_s * bakuage::Sqr(side_gain) + 1e-37);
@@ -236,7 +254,7 @@ namespace phase_limiter {
         };
         
         // エフェクトパラメータからエフェクト適用後のmean, covと各バンドの平均誤差を計算する
-        const auto calc_mean_cov = [apply_effect, band_count, &band_loudnesses](const Effect *effect, Eigen::VectorXd *mean_vec, Eigen::MatrixXd *cov, float *mse) {
+        const auto calc_mean_cov = [apply_effect, band_count, &band_loudnesses, &band_inputs](const Effect *effect, Eigen::VectorXd *mean_vec, Eigen::MatrixXd *cov, float *mse) {
             const auto relative_threshold_db = -20;
             mean_vec->resize(2 * band_count);
             cov->resize(2 * band_count, 2 * band_count);
@@ -250,7 +268,7 @@ namespace phase_limiter {
             }
             for (int i = 0; i < band_loudnesses.size(); i++) {
                 if (effect) {
-                    apply_effect(*effect, band_loudnesses[i].data(), applied.data());
+                    apply_effect(*effect, band_inputs.data() + i * band_count, applied.data());
                 } else {
                     bakuage::TypedMemcpy(applied.data(), band_loudnesses[i].data(), applied.size());
                 }
@@ -522,18 +540,7 @@ namespace phase_limiter {
                 bakuage::AlignedPodVector<float> filtered(channels * len);
                 {
                     FirFilter2<Float> fir_filter(fir.begin(), fir.end());
-                    bakuage::AlignedPodVector<Float> filter_temp_input(frames + fir_delay_samples);
-                    bakuage::AlignedPodVector<Float> filter_temp_output(frames + fir_delay_samples);
-                    for (int ch = 0; ch < channels; ch++) {
-                        fir_filter.Clear();
-                        for (int i = 0; i < frames; i++) {
-                            filter_temp_input[i] = wave_ptr[channels * i + ch];
-                        }
-                        fir_filter.Clock(filter_temp_input.data(), filter_temp_input.data() + frames + fir_delay_samples, filter_temp_output.data());
-                        for (int i = 0; i < frames; i++) {
-                            filtered[channels * i + ch] = filter_temp_output[i + fir_delay_samples];
-                        }
-                    }
+                    FilterWithDelay(&fir_filter, wave_ptr, frames, channels, fir_delay_samples, filtered.data());
                 }
                 update_progression_bound(0.2);
                 

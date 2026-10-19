@@ -1,5 +1,6 @@
 #include "phase_limiter/resampling.h"
 
+#include <algorithm>
 #include <cmath>
 #include <cstddef>
 #include <limits>
@@ -112,17 +113,30 @@ namespace phase_limiter{
         bakuage::FirFilter2<float> fir_filter(fir.begin(), fir.end());
         const int delay_samples = filter_len / 2;
         const size_t buffer_length = BufferLength(dest_length, delay_samples);
-        bakuage::AlignedPodVector<float> temp_input(buffer_length);
-        bakuage::AlignedPodVector<float> temp_output(buffer_length);
+        const size_t block_size = std::min<size_t>(buffer_length, fir_filter.max_process_len());
+        bakuage::AlignedPodVector<float> source_channel(src_length);
+        bakuage::AlignedPodVector<float> temp_input(block_size);
+        bakuage::AlignedPodVector<float> temp_output(block_size);
         wave->resize(static_cast<size_t>(channels) * dest_length);
         for (int ch = 0; ch < channels; ch++) {
             fir_filter.Clear();
+            // Expanded output can overwrite unread samples of this channel.
             for (size_t i = 0; i < src_length; i++) {
-                temp_input[n * i] = (*wave)[channels * i + ch] * n;
+                source_channel[i] = (*wave)[channels * i + ch];
             }
-            fir_filter.Clock(temp_input.data(), temp_input.data() + dest_length + delay_samples, temp_output.data());
-            for (size_t i = 0; i < dest_length; i++) {
-                (*wave)[channels * i + ch] = temp_output[i + delay_samples];
+            for (size_t offset = 0; offset < buffer_length; offset += block_size) {
+                const size_t count = std::min(block_size, buffer_length - offset);
+                std::fill(temp_input.begin(), temp_input.begin() + count, 0);
+                // Zero insertion stays aligned to the whole recording.
+                const size_t first_nonzero = (n - offset % n) % n;
+                for (size_t i = first_nonzero; i < count && offset + i < dest_length; i += n) {
+                    temp_input[i] = source_channel[(offset + i) / n] * n;
+                }
+                fir_filter.Clock(temp_input.data(), temp_input.data() + count, temp_output.data());
+                const size_t begin = offset < static_cast<size_t>(delay_samples) ? delay_samples - offset : 0;
+                for (size_t i = begin; i < count; i++) {
+                    (*wave)[channels * (offset + i - delay_samples) + ch] = temp_output[i];
+                }
             }
         }
     }
@@ -147,16 +161,24 @@ namespace phase_limiter{
             bakuage::FirFilter2<float> fir_filter(fir.begin(), fir.end());
             const int delay_samples = filter_len / 2;
             const size_t buffer_length = BufferLength(src_length, delay_samples);
-            bakuage::AlignedPodVector<float> temp_input(buffer_length);
-            bakuage::AlignedPodVector<float> temp_output(buffer_length);
+            const size_t block_size = std::min<size_t>(buffer_length, fir_filter.max_process_len());
+            bakuage::AlignedPodVector<float> temp_input(block_size);
+            bakuage::AlignedPodVector<float> temp_output(block_size);
             for (int ch = 0; ch < channels; ch++) {
                 fir_filter.Clear();
-                for (size_t i = 0; i < src_length; i++) {
-                    temp_input[i] = (*wave)[channels * i + ch];
-                }
-                fir_filter.Clock(temp_input.data(), temp_input.data() + src_length + delay_samples, temp_output.data());
-                for (size_t i = 0; i < dest_length; i++) {
-                    (*wave)[channels * i + ch] = temp_output[i * n + delay_samples];
+                for (size_t offset = 0; offset < buffer_length; offset += block_size) {
+                    const size_t count = std::min(block_size, buffer_length - offset);
+                    for (size_t i = 0; i < count; i++) {
+                        temp_input[i] = offset + i < src_length ? (*wave)[channels * (offset + i) + ch] : 0;
+                    }
+                    fir_filter.Clock(temp_input.data(), temp_input.data() + count, temp_output.data());
+                    size_t begin = offset < static_cast<size_t>(delay_samples) ? delay_samples - offset : 0;
+                    const size_t first_frame = offset + begin - delay_samples;
+                    begin += (n - first_frame % n) % n;
+                    size_t output_frame = (offset + begin - delay_samples) / n;
+                    for (size_t i = begin; i < count; i += n, ++output_frame) {
+                        (*wave)[channels * output_frame + ch] = temp_output[i];
+                    }
                 }
             }
         }

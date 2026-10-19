@@ -1,4 +1,5 @@
 #include "phase_limiter/auto_mastering.h"
+#include "phase_limiter/fir_processing.h"
 
 #include <cmath>
 #include <iostream>
@@ -295,18 +296,7 @@ void AutoMastering(std::vector<float> *_wave, const float **irs, const int *ir_l
 			bakuage::AlignedPodVector<float> filtered(channels * len);
             {
                 FirFilter2<Float> fir_filter(fir.begin(), fir.end());
-                bakuage::AlignedPodVector<Float> filter_temp_input(frames + fir_delay_samples);
-                bakuage::AlignedPodVector<Float> filter_temp_output(frames + fir_delay_samples);
-                for (int ch = 0; ch < channels; ch++) {
-                    fir_filter.Clear();
-                    for (int i = 0; i < frames; i++) {
-                        filter_temp_input[i] = wave_ptr[channels * i + ch];
-                    }
-                    fir_filter.Clock(filter_temp_input.data(), filter_temp_input.data() + frames + fir_delay_samples, filter_temp_output.data());
-                    for (int i = 0; i < frames; i++) {
-                        filtered[channels * i + ch] = filter_temp_output[i + fir_delay_samples];
-                    }
-                }
+                FilterWithDelay(&fir_filter, wave_ptr, frames, channels, fir_delay_samples, filtered.data());
             }
 			update_progression_bound(0.2);
 
