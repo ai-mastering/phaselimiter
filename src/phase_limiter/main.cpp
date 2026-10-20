@@ -65,6 +65,7 @@ DEFINE_int32(mastering3_iteration, 1000, "Mastering 3 optimization iteration cou
 DEFINE_double(mastering3_target_sn, 12, "Target S/N in dB used for Acoustic entropy calculation.");
 DEFINE_string(sound_quality2_cache, "./sound_quality2_cache", "sound quality2 cache path.");
 DEFINE_string(mastering5_optimization_algorithm, "de_prmm", "de / nm / pso / de_prmm / pso_dv");
+DEFINE_uint64(mastering5_optimization_seed, 1, "DE-PRMM random seed (independent of worker count within the same build).");
 DEFINE_int32(mastering5_optimization_max_eval_count, 40000, "Mastering5 optimization max eval count.");
 DEFINE_double(mastering5_mastering_level, 0.5, "Mastering5 mastering level.");
 DEFINE_string(mastering5_mastering_reference_file, "", "Mastering reference json path.");

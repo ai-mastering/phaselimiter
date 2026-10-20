@@ -23,6 +23,7 @@
 
 DECLARE_string(sound_quality2_cache);
 DECLARE_string(mastering5_optimization_algorithm);
+DECLARE_uint64(mastering5_optimization_seed);
 DECLARE_int32(mastering5_optimization_max_eval_count);
 DECLARE_double(mastering5_mastering_level);
 DECLARE_string(mastering5_mastering_reference_file);
@@ -454,6 +455,7 @@ namespace phase_limiter {
         // エフェクトパラメータ探索
         const auto find_params = [calc_eval, band_count, &zero_params, initial_eval, &lower_bounds, &upper_bounds]() {
             optim::algo_settings_t settings;
+            settings.de_rng_seed = FLAGS_mastering5_optimization_seed;
 #if 0
             // boundしているとうまく最適化できないので使わない。
             // grep inv_transform in optim

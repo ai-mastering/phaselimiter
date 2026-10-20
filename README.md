@@ -25,6 +25,15 @@ regions finish. See the [parallelization research notes](docs/phase-limiter-para
 (in Japanese) for the implementation, benchmark comparisons, source FFT cache
 tradeoffs, and reproduction instructions.
 
+For `--mastering --mastering_mode=mastering5`, the default `de_prmm` solver
+accepts `--mastering5_optimization_seed=1` (also the default). Each population
+slot has its own random stream, so changing `--worker_count` does not change
+candidate generation for the same seed. This option applies only to `de_prmm`.
+The old shared random sequence is not preserved. Reproducibility is tested
+within the same build; it does not promise identical floating-point results
+across platforms, callback/log ordering, or bit-identical final WAV files.
+
+
 ## project status
 
 inactive

@@ -122,6 +122,11 @@ if(BUILD_TESTING)
     "-DINPUT=${PROJECT_SOURCE_DIR}/test_data/test2.wav"
     -P "${PROJECT_SOURCE_DIR}/cmake/TestSndFileInfo.cmake")
 
+  add_executable(optim_rng_tests test/optim_rng.cpp)
+  target_link_libraries(optim_rng_tests PRIVATE phaselimiter_cli phaselimiter_optim gtest_main)
+  phaselimiter_enable_warnings(optim_rng_tests)
+  add_test(NAME optim-rng COMMAND optim_rng_tests)
+
   add_executable(classic_detector_tests test/classic_detector.cpp)
   target_link_libraries(classic_detector_tests PRIVATE classic_detector gtest_main Boost::filesystem)
   phaselimiter_enable_warnings(classic_detector_tests)
