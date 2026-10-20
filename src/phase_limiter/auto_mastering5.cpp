@@ -23,6 +23,7 @@
 #include "bakuage/fir_filter2.h"
 
 DECLARE_string(sound_quality2_cache);
+DECLARE_int32(worker_count);
 DECLARE_string(mastering5_optimization_algorithm);
 DECLARE_uint64(mastering5_optimization_seed);
 DECLARE_int32(mastering5_optimization_max_eval_count);
@@ -494,7 +495,8 @@ namespace phase_limiter {
                     std::vector<double>(lower_bounds.begin(), lower_bounds.end()),
                     std::vector<double>(upper_bounds.begin(), upper_bounds.end()),
                     FLAGS_mastering5_optimization_max_eval_count - 1,
-                    FLAGS_mastering5_optimization_seed);
+                    FLAGS_mastering5_optimization_seed,
+                    FLAGS_worker_count ? FLAGS_worker_count : tbb::task_scheduler_init::default_num_threads());
                 result = arma::vec(solution.params);
                 result_eval = solution.value;
                 success = true;

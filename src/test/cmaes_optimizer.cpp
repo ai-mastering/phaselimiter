@@ -1,9 +1,13 @@
 #include <cmath>
+#include <algorithm>
 #include <condition_variable>
 #include <future>
 #include <limits>
 #include <mutex>
+#include <set>
 #include <stdexcept>
+#include <thread>
+#include <omp.h>
 #include <gtest/gtest.h>
 #include "phase_limiter/cmaes_optimizer.h"
 
@@ -45,6 +49,63 @@ TEST(CmaesOptimizer, ConcurrentSearchesMatchIndependentRuns) {
     auto other = std::async(std::launch::async, [&] { return TraceSearch(42, overlap); });
     EXPECT_EQ(expected_zero, zero.get());
     EXPECT_EQ(expected_other, other.get());
+}
+
+TEST(CmaesOptimizer, SameCandidatesAndResultAcrossWorkerCounts) {
+    struct Run {
+        SearchTrace points;
+        phase_limiter::CmaesResult result;
+    };
+    const auto search = [](int workers, int budget, std::uint64_t seed, bool ties) {
+        Run run;
+        std::mutex mutex;
+        run.result = OptimizeCmaes([&](const std::vector<double> &x) {
+            {
+                std::lock_guard<std::mutex> lock(mutex);
+                run.points.push_back(x);
+            }
+            return ties ? -1.0 : std::pow(x[0] - 0.3, 2) + std::pow(x[1] + 0.2, 2);
+        }, {0, 0}, 0.13, {-1, -1}, {1, 1}, budget, seed, workers);
+        // Only callback arrival order may differ.
+        std::sort(run.points.begin(), run.points.end());
+        return run;
+    };
+    for (bool ties : {false, true}) {
+        for (auto seed : {0ULL, 1ULL, 0x100000001ULL}) {
+            for (int budget : {0, 1, 9, 17, 101}) {
+                const auto reference = search(1, budget, seed, ties);
+                EXPECT_LE(reference.points.size(), static_cast<size_t>(budget));
+                for (int workers : {2, 4, 32}) {
+                    const auto actual = search(workers, budget, seed, ties);
+                    EXPECT_EQ(reference.points, actual.points);
+                    EXPECT_EQ(reference.result.params, actual.result.params);
+                    EXPECT_EQ(reference.result.value, actual.result.value);
+                }
+            }
+        }
+    }
+}
+
+TEST(CmaesOptimizer, UsesOpenMpWorkersAndRestoresCallerSettings) {
+    const int original_threads = omp_get_max_threads();
+    const int original_dynamic = omp_get_dynamic();
+    std::mutex mutex;
+    std::set<std::thread::id> threads;
+    OptimizeCmaes([&](const std::vector<double> &) {
+        std::lock_guard<std::mutex> lock(mutex);
+        threads.insert(std::this_thread::get_id());
+        return 1.0;
+    }, {0, 0}, 0, {-1, -1}, {1, 1}, 17, 1, 4);
+    EXPECT_GT(threads.size(), 1u);
+    EXPECT_LE(threads.size(), 4u);
+    EXPECT_EQ(omp_get_max_threads(), original_threads);
+    EXPECT_EQ(omp_get_dynamic(), original_dynamic);
+
+    EXPECT_THROW(OptimizeCmaes([](const std::vector<double> &) -> double {
+        throw std::runtime_error("parallel objective failed");
+    }, {0, 0}, 0, {-1, -1}, {1, 1}, 17, 1, 4), std::runtime_error);
+    EXPECT_EQ(omp_get_max_threads(), original_threads);
+    EXPECT_EQ(omp_get_dynamic(), original_dynamic);
 }
 
 TEST(CmaesOptimizer, ImprovesWithinUnequalBounds) {

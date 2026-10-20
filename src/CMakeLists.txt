@@ -131,7 +131,7 @@ if(BUILD_TESTING)
   phaselimiter_enable_warnings(optim_rng_tests)
   add_test(NAME optim-rng COMMAND optim_rng_tests)
   add_executable(cmaes_optimizer_tests test/cmaes_optimizer.cpp)
-  target_link_libraries(cmaes_optimizer_tests PRIVATE mastering5_cmaes gtest_main Threads::Threads)
+  target_link_libraries(cmaes_optimizer_tests PRIVATE mastering5_cmaes gtest_main Threads::Threads OpenMP::OpenMP_CXX)
   phaselimiter_enable_warnings(cmaes_optimizer_tests)
   add_test(NAME cmaes-optimizer COMMAND cmaes_optimizer_tests)
 

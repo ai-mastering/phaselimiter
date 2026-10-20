@@ -37,7 +37,12 @@ The default solver remains `de_prmm`.
 
 CMA-ES starts from the unchanged effect parameters and searches within the
 mastering5 bounds, normalized to `[0, 1]` per parameter, with an initial step
-size of 0.2 and automatic population size. Objective evaluations are sequential.
+size of 0.2 and automatic population size. Objective evaluations use libcmaes'
+OpenMP parallel loop. `--worker_count` controls the thread limit (zero selects
+the same automatic CPU count as the other processing stages), capped by the
+population size. Candidate generation and covariance updates remain sequential.
+The same seed produces the same search across worker counts within the same
+build when objective evaluations are deterministic; callback/log order can vary.
 The positive evaluation budget includes the initial baseline and is a strict
 upper limit, even for a partial final generation; convergence can stop earlier.
 The best evaluated point is retained, with the baseline as a fallback.
@@ -47,6 +52,7 @@ The build applies a checked header patch to give each CMA-ES sampler its own
 random engine and Gaussian distribution state. Independent concurrent or nested
 searches therefore do not share random state. This fix changes the random
 sequence from the original integration; old seeds do not reproduce old results.
+An OpenMP-capable C++ compiler and runtime are required to build this mode.
 
 ## Phase limiter parallelization
 
