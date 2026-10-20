@@ -78,24 +78,65 @@ LPCはうまくない。なぜかというと、スペクトルがホワイト�
 逆にDRRが下がるみたいなことが起きる。
 direct_lengthは重要。
 */
-// The kernel depends only on the input length and sample rate, not the channel.
-inline bakuage::AlignedPodVector<float> ReverbSmoothingKernel(int samples, int sample_rate) {
-    const int spec_length = samples / 2 + 1;
-    const int smooth_window_size = std::max<int>(1, 1.0 * samples / sample_rate * 125);
-    bakuage::AlignedPodVector<std::complex<float>> spectrum(spec_length);
-    bakuage::AlignedPodVector<float> kernel(samples);
-    bakuage::RealDft<float> dft(samples);
-    for (int i = 0; i < spec_length; ++i) {
-        const float real = i < smooth_window_size ? (0.5 + 0.5 * std::cos(M_PI * i / smooth_window_size)) / smooth_window_size : 0;
-        spectrum[i] = std::complex<float>(real, 0);
+// Kahan compensation is also needed for the small increments in the rotation.
+struct ReverbCompensatedSum {
+    double value = 0;
+    double error = 0;
+
+    void Add(double x) {
+        const double y = x - error;
+        const double next = value + y;
+        error = (next - value) - y;
+        value = next;
     }
-    // This is a convolution kernel; do not apply the signal normalization scale.
-    dft.Backward((float *)spectrum.data(), kernel.data());
-    return kernel;
+};
+
+// Circular convolution with w[j] = (1 + cos(pi*j/L)) / (2*L), |j| < L.
+// Maintain the rectangular sum A and complex cosine sum B over [-L, L).
+// Advancing one bin gives A' = A - old + next and
+// B' = exp(-i*pi/L) * (B + old - next), so smoothing takes O(samples).
+inline std::vector<double> ReverbSmoothPsd(const double *psd, int samples, int window_length) {
+    const int bins = samples / 2 + 1;
+    const double theta = M_PI / window_length;
+    const double sine = std::sin(theta);
+    const double half_sine = std::sin(theta / 2);
+    // Avoid cancellation in cos(theta) - 1 for long windows.
+    const double cosine_minus_one = -2 * half_sine * half_sine;
+    auto at = [&](int i) {
+        if (i < 0) i = -i;
+        if (i >= samples) i %= samples;
+        if (i > samples / 2) i = samples - i;
+        return psd[i];
+    };
+    ReverbCompensatedSum sum, real, imag;
+    for (int j = -window_length; j < window_length; ++j) {
+        const double value = at(j);
+        sum.Add(value);
+        real.Add(value * std::cos(theta * j));
+        imag.Add(value * std::sin(theta * j));
+    }
+    std::vector<double> smoothed(bins);
+    for (int k = 0; k < bins; ++k) {
+        // Nonnegative weights and w[0] = 1/L imply S[k] >= P[k]/L.
+        // Enforce this bound to prevent roundoff from amplifying near-zero bins.
+        smoothed[k] = std::max(psd[k] / window_length,
+                              (sum.value + real.value) / (2.0 * window_length));
+        if (k + 1 == bins) break;
+        const double old = at(k - window_length);
+        const double next = at(k + window_length);
+        sum.Add(-old);
+        sum.Add(next);
+        real.Add(old);
+        real.Add(-next);
+        const double re = real.value, im = imag.value;
+        real.Add(std::fma(cosine_minus_one, re, sine * im));
+        imag.Add(std::fma(cosine_minus_one, im, -sine * re));
+    }
+    return smoothed;
 }
 
 template <typename Float>
-void CalculateDirectReverbCore(const Float *input, int samples, int sample_rate, Float *direct, Float *reverb, const float *smooth_kernel) {
+void CalculateDirectReverbCore(const Float *input, int samples, int sample_rate, Float *direct, Float *reverb) {
 	const int max_length = 0.25 * sample_rate;
 	const int direct_length = 0.001 * sample_rate;
 	const int dr_transition_length = 0.0001 * sample_rate;
@@ -111,7 +152,7 @@ void CalculateDirectReverbCore(const Float *input, int samples, int sample_rate,
 //	std::vector<Float> lpc_reconstruction = CalculateLPCReconstruction(input, samples, 64);
 
 	// calculate psd
-	std::vector<Float> psd(spec_length);
+	std::vector<double> psd(spec_length);
 	double energy = 0;
 	for (int i = 0; i < samples; i++) {
 		energy += input[i] * input[i];
@@ -129,46 +170,13 @@ void CalculateDirectReverbCore(const Float *input, int samples, int sample_rate,
         psd[i] = std::norm(fft_output[i]);
 	}
 
-	// calculate auto correlation
-	std::vector<Float> auto_correlation(samples);
-	for (int i = 0; i < spec_length; i++) {
-        fft_output[i] = std::complex<float>(psd[i] * scale, 0);
-	}
-    dft.Backward((float *)fft_output, fft_input);
-	for (int i = 0; i < samples; i++) {
-		auto_correlation[i] = fft_input[i];
-	}
-
-	if (0) {
-		// normalize psd and auto correlation for calculation accuracy
-		Float psd_scale = 1.0 / (1e-37 + auto_correlation[0]);
-		for (int i = 0; i < samples; i++) {
-			auto_correlation[i] *= psd_scale;
-		}
-		for (int i = 0; i < spec_length; i++) {
-			psd[i] *= psd_scale;
-		}
-	}
-
-	// calculate smooth psd using the shared signal-independent kernel
-	std::vector<Float> smooth_psd(spec_length);
-	for (int i = 0; i < samples; i++) {
-		fft_input[i] = smooth_kernel[i] * (auto_correlation[i] * scale);
-	}
-	dft.Forward(fft_input, (float *)fft_output);
-	for (int i = 0; i < spec_length; i++) {
-		if (fft_output[i].real() < 0) {
-#if 0
-            fprintf(stderr, "%d, %e, %e, %e\n", i, fft_output[i].real(), fft_output[i].imag(), psd[i]);
-#endif
-		}
-		smooth_psd[i] = std::max<Float>(0, fft_output[i].real());
-	}
+    const int smooth_window_size = std::max<int>(1, 1.0 * samples / sample_rate * 125);
+    const auto smooth_psd = ReverbSmoothPsd(psd.data(), samples, smooth_window_size);
 
 	// calculate whitened IR and decompose direct, reverb
 	for (int i = 0; i < spec_length; i++) {
 		// fprintf(stderr, "%e, %e\n", psd[i], smooth_psd[i]);
-        fft_output[i] = std::complex<float>(std::sqrt(psd[i] / (1e-37 + smooth_psd[i])) * scale, 0);
+        fft_output[i] = std::complex<float>(std::sqrt(psd[i] / std::max(1e-37, smooth_psd[i])) * scale, 0);
 	}
 	dft.Backward((float *)fft_output, fft_input);
     // Only the head and tail can contribute; the omitted middle is zero by construction.
@@ -206,7 +214,6 @@ void CalculateDirectReverbCore(const Float *input, int samples, int sample_rate,
 template <typename Float>
 void CalculateDirectReverbEnergyRatio(const Float *input, int channels, int samples, int sample_rate, Float *drr) {
 	using namespace impl;
-	const auto smooth_kernel = ReverbSmoothingKernel(samples, sample_rate);
 
 	std::vector<double> ratios(channels);
 	tbb::parallel_for(0, channels, [&](int ch) {
@@ -217,7 +224,7 @@ void CalculateDirectReverbEnergyRatio(const Float *input, int channels, int samp
 		}
 
 		double direct, reverb;
-		CalculateDirectReverbCore<double>(temp.data(), samples, sample_rate, &direct, &reverb, smooth_kernel.data());
+		CalculateDirectReverbCore<double>(temp.data(), samples, sample_rate, &direct, &reverb);
 
 		ratios[ch] = reverb / (1e-37 + direct);
 	});
