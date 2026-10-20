@@ -7,6 +7,7 @@
 #include <limits>
 #include <exception>
 #include <memory>
+#include <tbb/parallel_for.h>
 #include "CImg.h"
 #include "bakuage/utils.h"
 #include "bakuage/pan_detect_filter.h"
@@ -34,7 +35,8 @@ void CalculateStereo(Float *input, int channels, int samples, int sample_freq, s
 	const int pan_division = 11; // 奇数
     std::vector<std::vector<Statistics>> freq_pan_to_energy(filters.size(), std::vector<Statistics>(pan_division));
 
-    for (int i = 0; i < filters.size(); i++) {
+    // Each band owns its filter state and statistics; preserve sample order within it.
+    tbb::parallel_for(0, static_cast<int>(filters.size()), [&](int i) {
         for (int j = 0; j < samples; j++) {
             bakuage::PanDetectFilter<double>::Output output = filters[i]->Clock(input[2 * j + 0], input[2 * j + 1]);           
             if (output.valid) {
@@ -45,7 +47,7 @@ void CalculateStereo(Float *input, int channels, int samples, int sample_freq, s
                 }
             }
         }
-    }
+    });
     
     std::vector<std::vector<Float>> freq_pan_to_db(filters.size(), std::vector<Float>(pan_division));
     for (int i = 0; i < filters.size(); i++) {
