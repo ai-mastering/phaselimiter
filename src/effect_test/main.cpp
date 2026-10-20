@@ -12,6 +12,7 @@
 #include "bakuage/dft.h"
 #include "bakuage/memory.h"
 #include "bakuage/utils.h"
+#include "bakuage/vector_math.h"
 #include "bakuage/window_func.h"
 #include "bakuage/transient_filter.h"
 #include "bakuage/transient_filter2.h"
@@ -163,10 +164,7 @@ int main(int argc, char* argv[]) {
     
     // normalize
     if (FLAGS_normalize) {
-        double peak = 1e-37;
-        for (int i = 0; i < output.size(); i++) {
-            peak = std::max<double>(peak, std::abs(output[i]));
-        }
+        const double peak = std::max<double>(1e-37, bakuage::VectorLInf(output.data(), output.size()));
         for (int i = 0; i < output.size(); i++) {
             output[i] /= peak;
         }

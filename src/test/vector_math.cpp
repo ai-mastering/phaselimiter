@@ -1,6 +1,23 @@
 #include "gtest/gtest.h"
 #include <limits>
+#include <vector>
 #include "bakuage/vector_math.h"
+
+TEST(VectorMath, VectorLInfFloat) {
+    EXPECT_EQ(0, bakuage::VectorLInf<float>(nullptr, 0));
+    for (int size : {1, 7, 16, 17, 8192}) {
+        SCOPED_TRACE(size);
+        // Exclude the first element to exercise an unaligned input.
+        std::vector<float> storage(size + 1, 0);
+        float *input = storage.data() + 1;
+        EXPECT_EQ(0, bakuage::VectorLInf(input, size));
+        input[0] = 0.5f;
+        input[size - 1] = -1.25f;
+        EXPECT_EQ(1.25f, bakuage::VectorLInf(input, size));
+        input[size - 1] = 2.0f;
+        EXPECT_EQ(2.0f, bakuage::VectorLInf(input, size));
+    }
+}
 
 TEST(VectorMath, VectorSanitizeInplace) {
     using namespace bakuage;

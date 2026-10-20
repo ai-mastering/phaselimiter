@@ -10,6 +10,7 @@
 #include "bakuage/utils.h"
 #include "bakuage/fir_design.h"
 #include "bakuage/fir_filter2.h"
+#include "bakuage/vector_math.h"
 
 namespace audio_analyzer {
     
@@ -32,9 +33,7 @@ void CalculateLowpassTruePeak(const Float *input, int channels, int samples, int
                     temp_input[true_peak_oversample * j] = i + j < samples ? input[channels * (i + j) + ch] * true_peak_oversample : 0;
                 }
                 fir_filter.Clock(temp_input.data(), temp_input.data() + max_process_size, temp_output.data());
-                for (int j = 0; j < max_process_size; j++) {
-                    tp = std::max<Float>(tp, std::abs(temp_output[j]));
-                }
+                tp = std::max<Float>(tp, bakuage::VectorLInf(temp_output.data(), max_process_size));
             }
         }
         *true_peak = 20 * std::log10(tp + 1e-37);

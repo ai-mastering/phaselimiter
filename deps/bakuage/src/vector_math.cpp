@@ -321,7 +321,7 @@ namespace bakuage {
     template <>
     float VectorLInf<float>(const float *x, int n) {
         float result = 0;
-        ippsNorm_Inf_32f(x, n, &result);
+        ippsMaxAbs_32f(x, n, &result);
         return result;
     }
 
