@@ -154,6 +154,7 @@ if(BUILD_TESTING)
     test/main.cpp
     test/old_tests.cpp
     test/peak.cpp
+    test/reverb.cpp
     test/sound_quality2.cpp
     test/temporary_memory.cpp
     test/utils.cpp

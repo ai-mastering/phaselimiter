@@ -5,6 +5,7 @@
 #include <cmath>
 #include <vector>
 #include <random>
+#include <tbb/parallel_for.h>
 
 #include "bakuage/memory.h"
 #include "bakuage/dft.h"
@@ -77,15 +78,28 @@ LPCはうまくない。なぜかというと、スペクトルがホワイト�
 逆にDRRが下がるみたいなことが起きる。
 direct_lengthは重要。
 */
+// The kernel depends only on the input length and sample rate, not the channel.
+inline bakuage::AlignedPodVector<float> ReverbSmoothingKernel(int samples, int sample_rate) {
+    const int spec_length = samples / 2 + 1;
+    const int smooth_window_size = std::max<int>(1, 1.0 * samples / sample_rate * 125);
+    bakuage::AlignedPodVector<std::complex<float>> spectrum(spec_length);
+    bakuage::AlignedPodVector<float> kernel(samples);
+    bakuage::RealDft<float> dft(samples);
+    for (int i = 0; i < spec_length; ++i) {
+        const float real = i < smooth_window_size ? (0.5 + 0.5 * std::cos(M_PI * i / smooth_window_size)) / smooth_window_size : 0;
+        spectrum[i] = std::complex<float>(real, 0);
+    }
+    // This is a convolution kernel; do not apply the signal normalization scale.
+    dft.Backward((float *)spectrum.data(), kernel.data());
+    return kernel;
+}
+
 template <typename Float>
-void CalculateDirectReverbCore(const Float *input, int samples, int sample_rate, Float *direct, Float *reverb) {
+void CalculateDirectReverbCore(const Float *input, int samples, int sample_rate, Float *direct, Float *reverb, const float *smooth_kernel) {
 	const int max_length = 0.25 * sample_rate;
 	const int direct_length = 0.001 * sample_rate;
 	const int dr_transition_length = 0.0001 * sample_rate;
 	const int spec_length = samples / 2 + 1;
-	const int smooth_window_size = 0 ?
-		std::max<int>(1, 1.0 * samples / direct_length) :
-		std::max<int>(1, 1.0 * samples / sample_rate * 125);
 	const Float scale = 1.0 / std::sqrt(samples);
 
 	// prepare FFT
@@ -136,21 +150,10 @@ void CalculateDirectReverbCore(const Float *input, int samples, int sample_rate,
 		}
 	}
 
-	// calculate smooth psd
+	// calculate smooth psd using the shared signal-independent kernel
 	std::vector<Float> smooth_psd(spec_length);
-	for (int i = 0; i < spec_length; i++) {
-		// ここは畳み込みを意図しているので、あえてscaleをかけない
-
-#if 0
-        const float real = i < smooth_window_size ? 1.0 / smooth_window_size : 0;
-#else
-		const float real = i < smooth_window_size ? (0.5 + 0.5 * std::cos(M_PI * i / smooth_window_size)) / smooth_window_size : 0;
-#endif
-        fft_output[i] = std::complex<float>(real, 0);
-	}
-    dft.Backward((float *)fft_output, fft_input);
 	for (int i = 0; i < samples; i++) {
-		fft_input[i] *= auto_correlation[i] * scale;
+		fft_input[i] = smooth_kernel[i] * (auto_correlation[i] * scale);
 	}
 	dft.Forward(fft_input, (float *)fft_output);
 	for (int i = 0; i < spec_length; i++) {
@@ -163,74 +166,36 @@ void CalculateDirectReverbCore(const Float *input, int samples, int sample_rate,
 	}
 
 	// calculate whitened IR and decompose direct, reverb
-	std::vector<Float> ir_direct(samples);
-	std::vector<Float> ir_reverb(samples);
 	for (int i = 0; i < spec_length; i++) {
 		// fprintf(stderr, "%e, %e\n", psd[i], smooth_psd[i]);
         fft_output[i] = std::complex<float>(std::sqrt(psd[i] / (1e-37 + smooth_psd[i])) * scale, 0);
 	}
 	dft.Backward((float *)fft_output, fft_input);
-	//fprintf(stdout, "x,y\n");
-	for (int i = 0; i < samples; i++) {
-		const int x = i <= samples / 2 ? i : samples - i;
-		//fprintf(stdout, "%d,%e\n", i, fft_input[i]);
-		if (i >= 44100) {
-			//exit(0);
-		}
-
-		if (x < direct_length) {
-			ir_direct[i] = fft_input[i];
-		}
-		else if (x < direct_length + dr_transition_length) {
-			const double t = 1.0 * (x - direct_length) / dr_transition_length;
-			const double s = 0.5 + 0.5 * std::cos(M_PI * t);
-			ir_direct[i] = fft_input[i] * s;
-			ir_reverb[i] = fft_input[i] * (1 - s);
-		}
-		else if (x < max_length) {
-			ir_reverb[i] = fft_input[i];
-		}
-	}
-
-	if (1) {
-		// disable unwhiten
-		double sum_direct = 0;
-		for (int i = 0; i < samples; i++) {
-			sum_direct += ir_direct[i] * ir_direct[i];
-		}
-		*direct = sum_direct;
-
-		double sum_reverb = 0;
-		for (int i = 0; i < samples; i++) {
-			sum_reverb += ir_reverb[i] * ir_reverb[i];
-		}
-		*reverb = sum_reverb;
-	}
-	else {
-		// calculate unwhitened direct IR energy
-		for (int i = 0; i < samples; i++) {
-			fft_input[i] = ir_direct[i] * scale;
-		}
-		dft.Forward(fft_input, (float *)fft_output);
-		double sum_direct = 0;
-		for (int i = 0; i < spec_length; i++) {
-			const int c = (i == 0 || 2 * i == samples) ? 1 : 2; // 片側FFTなので重複分
-            sum_direct += c * bakuage::Sqr(fft_output[i].real()) * smooth_psd[i]; // 虚部 == 0
-		}
-		*direct = sum_direct;
-
-		// calculate unwhitened reverb IR energy
-		for (int i = 0; i < samples; i++) {
-			fft_input[i] = ir_reverb[i] * scale;
-		}
-		dft.Forward(fft_input, (float *)fft_output);
-		double sum_reverb = 0;
-		for (int i = 0; i < spec_length; i++) {
-			const int c = (i == 0 || 2 * i == samples) ? 1 : 2; // 片側FFTなので重複分
-			sum_reverb += c * bakuage::Sqr(fft_output[i].real()) * smooth_psd[i]; // 虚部 == 0
-		}
-		*reverb = sum_reverb;
-	}
+    // Only the head and tail can contribute; the omitted middle is zero by construction.
+    double sum_direct = 0, sum_reverb = 0;
+    auto accumulate = [&](int i) {
+        const int x = i <= samples / 2 ? i : samples - i;
+        Float direct_value = 0, reverb_value = 0;
+        if (x < direct_length) {
+            direct_value = fft_input[i];
+        } else if (x < direct_length + dr_transition_length) {
+            const double t = 1.0 * (x - direct_length) / dr_transition_length;
+            const double s = 0.5 + 0.5 * std::cos(M_PI * t);
+            direct_value = fft_input[i] * s;
+            reverb_value = fft_input[i] * (1 - s);
+        } else if (x < max_length) {
+            reverb_value = fft_input[i];
+        }
+        sum_direct += direct_value * direct_value;
+        sum_reverb += reverb_value * reverb_value;
+    };
+    const int head_end = std::min(samples, max_length);
+    for (int i = 0; i < head_end; ++i) accumulate(i);
+    // Avoid visiting overlapping head/tail ranges twice for short inputs.
+    const int tail_start = std::max(head_end, samples - max_length + 1);
+    for (int i = tail_start; i < samples; ++i) accumulate(i);
+    *direct = sum_direct;
+    *reverb = sum_reverb;
 
     bakuage::AlignedFree(fft_input);
     bakuage::AlignedFree(fft_output);
@@ -241,37 +206,24 @@ void CalculateDirectReverbCore(const Float *input, int samples, int sample_rate,
 template <typename Float>
 void CalculateDirectReverbEnergyRatio(const Float *input, int channels, int samples, int sample_rate, Float *drr) {
 	using namespace impl;
+	const auto smooth_kernel = ReverbSmoothingKernel(samples, sample_rate);
 
-	double sum_reverb = 0;
-	double base_line_direct;
-	double base_line_reverb;
-	std::vector<double> temp(samples);
-
-	// calculate base line (誤差)
-	const int seed = 1;
-	std::mt19937 mt(seed);
-	std::normal_distribution<> dist(0.0, 1.0);
-	for (int i = 0; i < samples; i++) {
-		temp[i] = dist(mt);
-	}
-	CalculateDirectReverbCore<double>(temp.data(), samples, sample_rate, &base_line_direct, &base_line_reverb);
-
-	for (int ch = 0; ch < channels; ch++) {
+	std::vector<double> ratios(channels);
+	tbb::parallel_for(0, channels, [&](int ch) {
+		std::vector<double> temp(samples);
 		// main
 		for (int i = 0; i < samples; i++) {
 			temp[i] = input[i * channels + ch];
 		}
 
 		double direct, reverb;
-		CalculateDirectReverbCore<double>(temp.data(), samples, sample_rate, &direct, &reverb);
+		CalculateDirectReverbCore<double>(temp.data(), samples, sample_rate, &direct, &reverb, smooth_kernel.data());
 
-		fprintf(stderr, "%e, %e, %e, %e\n", direct, reverb, base_line_direct, base_line_reverb);
-
-		/*direct = std::max<double>(0, direct - (base_line_direct - 1));
-		reverb = std::max<double>(0, reverb - (base_line_reverb - 1));*/
-		sum_reverb += reverb / (1e-37 + direct);
-
-	}
+		ratios[ch] = reverb / (1e-37 + direct);
+	});
+	// Preserve the original channel reduction order regardless of scheduling.
+	double sum_reverb = 0;
+	for (int ch = 0; ch < channels; ++ch) sum_reverb += ratios[ch];
 
 	*drr = -10 * std::log10(1e-37 + sum_reverb / channels);
 	fprintf(stderr, "drr %f\n", *drr);
