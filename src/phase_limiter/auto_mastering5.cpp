@@ -13,6 +13,7 @@
 #include "picojson.h"
 #include "tbb/tbb.h"
 #include <optim.hpp>
+#include "phase_limiter/cmaes_optimizer.h"
 #include <boost/archive/binary_iarchive.hpp>
 
 #include "bakuage/sound_quality2.h"
@@ -133,6 +134,9 @@ namespace phase_limiter {
     // エフェクトはloudness vector上でシミュレーションする
     // 基準ラウドネスの違いとかはホワイトノイズを処理して補正値を計算して補正する
     void AutoMastering5(std::vector<float> *_wave, const int sample_rate, const std::function<void(float)> &progress_callback) {
+        if (FLAGS_mastering5_optimization_max_eval_count < 1) {
+            throw std::invalid_argument("mastering5_optimization_max_eval_count must be positive");
+        }
         const int frames = _wave->size() / 2;
         const int channels = 2;
         const float block_sec = 0.4;
@@ -433,7 +437,7 @@ namespace phase_limiter {
             {
                 std::lock_guard<std::mutex> lock(eval_mtx);
                 eval_count++;
-                if (eval_count % (FLAGS_mastering5_optimization_max_eval_count / 10) == 0 && eval_count < FLAGS_mastering5_optimization_max_eval_count) {
+                if (eval_count % std::max(1, FLAGS_mastering5_optimization_max_eval_count / 10) == 0 && eval_count < FLAGS_mastering5_optimization_max_eval_count) {
                     progress_callback(0.1 + 0.5 * eval_count / FLAGS_mastering5_optimization_max_eval_count);
                 }
                 if (min_eval > eval) {
@@ -478,9 +482,23 @@ namespace phase_limiter {
             settings.pso_initial_ub = upper_bounds;
 #endif
             auto result = zero_params;
+            double result_eval = initial_eval;
             bool success;
             // それぞれ最大繰り返し回数の指定方法が違うので注意。ソースコード参照
-            if (FLAGS_mastering5_optimization_algorithm == "nm") {
+            if (FLAGS_mastering5_optimization_algorithm == "cmaes") {
+                const auto solution = OptimizeCmaes(
+                    [calc_eval](const std::vector<double> &params) {
+                        return calc_eval(arma::vec(params));
+                    },
+                    std::vector<double>(zero_params.begin(), zero_params.end()), initial_eval,
+                    std::vector<double>(lower_bounds.begin(), lower_bounds.end()),
+                    std::vector<double>(upper_bounds.begin(), upper_bounds.end()),
+                    FLAGS_mastering5_optimization_max_eval_count - 1,
+                    FLAGS_mastering5_optimization_seed);
+                result = arma::vec(solution.params);
+                result_eval = solution.value;
+                success = true;
+            } else if (FLAGS_mastering5_optimization_algorithm == "nm") {
                 settings.iter_max = FLAGS_mastering5_optimization_max_eval_count / lower_bounds.size();
                 success = optim::nm(result, [calc_eval](const arma::vec& vec, arma::vec* grad_out, void *opt_data) {
                     return calc_eval(vec);
@@ -509,7 +527,9 @@ namespace phase_limiter {
             } else {
                 throw std::logic_error(std::string("unknown FLAGS_mastering5_optimization_algorithm " + FLAGS_mastering5_optimization_algorithm));
             }
-            const auto result_eval = calc_eval(result);
+            if (FLAGS_mastering5_optimization_algorithm != "cmaes") {
+                result_eval = calc_eval(result);
+            }
             std::cerr << "optimization success: " << success << std::endl;
             std::cerr << "optimization solution y: " << result_eval << std::endl;
             for (int i = 0; i < band_count; i++) {

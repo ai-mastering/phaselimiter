@@ -18,6 +18,36 @@ The limiter and automated mastering engine used by Onatsu Bakuage-kun.
 - Results: using the median across three seeds for each excerpt, CMA-ES ranked first on 11 of 12 excerpts at 10,000 evaluations; jDE won on the remaining glockenspiel excerpt. CMA-ES's worst rank was a tie for third. On 11 excerpts, even its worst seed outperformed the current optim's best seed. At 500–1,000 evaluations, however, NLopt ranked first on all 12 excerpts. Every dlib trial on the additional excerpts reached the 300-second timeout, so dlib was excluded from rankings at equal evaluation budgets.
 - These are practical configurations: the current optim retains its original unbounded search, while the other solvers share a bounded, normalized search domain. With only three trials per excerpt, the results do not establish general superiority, convergence to a global optimum, or perceived audio quality.
 
+### Using CMA-ES in mastering5
+
+Select active CMA-ES with:
+
+```sh
+phase_limiter --input=input.wav --output=output.wav \
+  --mastering --mastering_mode=mastering5 \
+  --mastering5_optimization_algorithm=cmaes \
+  --mastering5_optimization_seed=1 \
+  --mastering5_optimization_max_eval_count=10000
+```
+
+This mode uses [libcmaes](https://github.com/CMA-ES/libcmaes) v0.10.2,
+built from the pinned submodule with the repository's Eigen headers. Run
+`git submodule update --init --recursive` before building an updated checkout.
+The default solver remains `de_prmm`.
+
+CMA-ES starts from the unchanged effect parameters and searches within the
+mastering5 bounds, normalized to `[0, 1]` per parameter, with an initial step
+size of 0.2 and automatic population size. Objective evaluations are sequential.
+The positive evaluation budget includes the initial baseline and is a strict
+upper limit, even for a partial final generation; convergence can stop earlier.
+The best evaluated point is retained, with the baseline as a fallback.
+Seeds, including zero, are reproducible within the same build. These settings
+do not imply bit-identical reproduction of the historical benchmark above.
+The build applies a checked header patch to give each CMA-ES sampler its own
+random engine and Gaussian distribution state. Independent concurrent or nested
+searches therefore do not share random state. This fix changes the random
+sequence from the original integration; old seeds do not reproduce old results.
+
 ## Phase limiter parallelization
 
 The limiter schedules boundary FFT work as soon as its overlapping interior
@@ -28,7 +58,7 @@ tradeoffs, and reproduction instructions.
 For `--mastering --mastering_mode=mastering5`, the default `de_prmm` solver
 accepts `--mastering5_optimization_seed=1` (also the default). Each population
 slot has its own random stream, so changing `--worker_count` does not change
-candidate generation for the same seed. This option applies only to `de_prmm`.
+candidate generation for the same seed. The seed option also applies to `cmaes`.
 The old shared random sequence is not preserved. Reproducibility is tested
 within the same build; it does not promise identical floating-point results
 across platforms, callback/log ordering, or bit-identical final WAV files.

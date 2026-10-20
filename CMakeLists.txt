@@ -43,6 +43,7 @@ include(CTest)
 include(GNUInstallDirs)
 include(Dependencies)
 include(ProjectOptions)
+include(Cmaes)
 
 add_library(bakuage STATIC
   deps/bakuage/src/bessel.cpp

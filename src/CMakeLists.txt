@@ -53,7 +53,11 @@ add_executable(phase_limiter
   phase_limiter/test_grad_calculator.cpp
   phase_limiter/test_perfect_hash_power_of_2.cpp
 )
-target_link_libraries(phase_limiter PRIVATE phaselimiter_cli phaselimiter_optim)
+add_library(mastering5_cmaes STATIC phase_limiter/cmaes_optimizer.cpp)
+target_include_directories(mastering5_cmaes PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}")
+target_link_libraries(mastering5_cmaes PRIVATE phaselimiter_cmaes phaselimiter_options)
+phaselimiter_enable_warnings(mastering5_cmaes)
+target_link_libraries(phase_limiter PRIVATE phaselimiter_cli phaselimiter_optim mastering5_cmaes)
 phaselimiter_enable_warnings(phase_limiter)
 
 add_executable(spectrogram
@@ -126,6 +130,10 @@ if(BUILD_TESTING)
   target_link_libraries(optim_rng_tests PRIVATE phaselimiter_cli phaselimiter_optim gtest_main)
   phaselimiter_enable_warnings(optim_rng_tests)
   add_test(NAME optim-rng COMMAND optim_rng_tests)
+  add_executable(cmaes_optimizer_tests test/cmaes_optimizer.cpp)
+  target_link_libraries(cmaes_optimizer_tests PRIVATE mastering5_cmaes gtest_main Threads::Threads)
+  phaselimiter_enable_warnings(cmaes_optimizer_tests)
+  add_test(NAME cmaes-optimizer COMMAND cmaes_optimizer_tests)
 
   add_executable(classic_detector_tests test/classic_detector.cpp)
   target_link_libraries(classic_detector_tests PRIVATE classic_detector gtest_main Boost::filesystem)

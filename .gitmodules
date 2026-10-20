@@ -22,3 +22,6 @@
 [submodule "deps/gflags"]
 	path = deps/gflags
 	url = https://github.com/gflags/gflags.git
+[submodule "deps/libcmaes"]
+	path = deps/libcmaes
+	url = https://github.com/CMA-ES/libcmaes.git
