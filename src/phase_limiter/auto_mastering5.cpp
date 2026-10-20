@@ -35,13 +35,26 @@ namespace {
     // x -> dry_gain -> output
     class LoudnessMapping {
     public:
+        struct PreparedInput {
+            Float loudness_db;
+            double floor_amplitude_gain;
+        };
+
+        // Independent of mapping parameters, so this can be shared by all
+        // optimization candidates. Keep the output-floor conversion here.
+        static PreparedInput PrepareInput(Float x) {
+            static const double log10_div_20 = std::log(10) / 20;
+            return {x, kAmplitudeFloor * std::exp(-log10_div_20 * x)};
+        }
+
         LoudnessMapping() {}
         LoudnessMapping(Float original_mean, Float relative_threshold,
                         Float wet_gain, Float relative_dry_gain, Float ratio):
         original_mean_(original_mean),
         target_mean_(original_mean + wet_gain),
         threshold_(original_mean + relative_threshold),
-        dry_gain_(wet_gain + relative_dry_gain), inv_ratio_(1.0 / ratio) {}
+        dry_gain_(wet_gain + relative_dry_gain), inv_ratio_(1.0 / ratio),
+        dry_amplitude_gain_(0.5 * std::exp((std::log(10) / 20) * dry_gain_)) {}
         
         Float operator () (Float x) const {
             static const float log10_div_20 = std::log(10) / 20;
@@ -49,16 +62,29 @@ namespace {
             Float gain = (w - original_mean_) * inv_ratio_ + target_mean_ - w;
             Float y = x + gain;
             Float z = x + dry_gain_;
-            return 20 * std::log10(1e-37 + 0.5 * std::exp(log10_div_20 * y) + 0.5 * std::exp(log10_div_20 * z));
+            return 20 * std::log10(kAmplitudeFloor + 0.5 * std::exp(log10_div_20 * y) + 0.5 * std::exp(log10_div_20 * z));
+        }
+
+        // Input is in dB; output is an amplitude multiplier, not a power gain.
+        // Used only by the mastering5 simulation. Keep the compressor's dB
+        // interface unchanged, including its original floating-point rounding.
+        double AmplitudeGain(const PreparedInput &input) const {
+            static const double log10_div_20 = std::log(10) / 20;
+            const Float w = std::max(threshold_, input.loudness_db);
+            const Float gain = (w - original_mean_) * inv_ratio_ + target_mean_ - w;
+            return 0.5 * std::exp(log10_div_20 * gain) + dry_amplitude_gain_
+                + input.floor_amplitude_gain;
         }
         
         Float threshold() const { return threshold_; }
     private:
+        static constexpr double kAmplitudeFloor = 1e-37;
         Float original_mean_;
         Float target_mean_;
         Float threshold_;
         Float dry_gain_;
         Float inv_ratio_;
+        double dry_amplitude_gain_;
     };
     typedef MsCompressorFilter<Float, LoudnessMapping, LoudnessMapping> Compressor;
     
@@ -214,8 +240,8 @@ namespace phase_limiter {
         struct BandInput {
             Float rms_m;
             Float rms_s;
-            Float total_loudness;
-            Float mid_to_side_loudness;
+            LoudnessMapping::PreparedInput total_input;
+            LoudnessMapping::PreparedInput mid_to_side_input;
         };
         std::vector<BandInput> band_inputs(band_loudnesses.size() * band_count);
         for (size_t block = 0; block < band_loudnesses.size(); ++block) {
@@ -225,8 +251,8 @@ namespace phase_limiter {
                 auto &input = band_inputs[block * band_count + band];
                 input.rms_m = std::pow(10, 0.1 * input_m);
                 input.rms_s = std::pow(10, 0.1 * input_s);
-                input.total_loudness = -0.691 + 10 * std::log10(input.rms_m + input.rms_s + 1e-37);
-                input.mid_to_side_loudness = input_s - input_m;
+                input.total_input = LoudnessMapping::PrepareInput(-0.691 + 10 * std::log10(input.rms_m + input.rms_s + 1e-37));
+                input.mid_to_side_input = LoudnessMapping::PrepareInput(input_s - input_m);
             }
         }
 
@@ -235,21 +261,17 @@ namespace phase_limiter {
             for (int i = 0; i < effect.band_effects.size(); i++) {
                 const auto &band_effect = effect.band_effects[i];
                 // static const float sqrt_0_5 = std::sqrt(0.5); // 元のMsCompressorFilterはmsにするときにこれをかけていた。誤差が問題になるなら考える
-                static const float log10_div_20 = std::log(10) / 20;
-                
-                Float rms_m = input[i].rms_m;
-                Float rms_s = input[i].rms_s;
-                Float total_loudness = input[i].total_loudness;
-                Float mapped_loudness = band_effect.loudness_mapping(total_loudness);
-                
-                Float mid_to_side_loudness = input[i].mid_to_side_loudness;
-                Float side_gain = std::exp(log10_div_20 * (band_effect.ms_loudness_mapping(mid_to_side_loudness) - mid_to_side_loudness));
-                
-                Float total_loudness_with_side_gain = -0.691 + 10 * std::log10(rms_m + rms_s * bakuage::Sqr(side_gain) + 1e-37);
-                Float gain = std::exp(log10_div_20 * (mapped_loudness - total_loudness_with_side_gain));
-                
-                output[2 * i + 0] = 10 * std::log10(rms_m * bakuage::Sqr(gain));
-                output[2 * i + 1] = 10 * std::log10(rms_s * bakuage::Sqr(side_gain * gain));
+                const double rms_m = input[i].rms_m;
+                const double rms_s = input[i].rms_s;
+                const double total_gain = band_effect.loudness_mapping.AmplitudeGain(input[i].total_input);
+                const double side_gain = band_effect.ms_loudness_mapping.AmplitudeGain(input[i].mid_to_side_input);
+                const double side_power_gain = bakuage::Sqr(side_gain);
+                // Normalize the changed M/S balance while applying the total
+                // gain, without converting intermediate levels to/from dB.
+                const double power_gain = bakuage::Sqr(total_gain)
+                    * (rms_m + rms_s + 1e-37) / (rms_m + rms_s * side_power_gain + 1e-37);
+                output[2 * i + 0] = 10 * std::log10(rms_m * power_gain);
+                output[2 * i + 1] = 10 * std::log10(rms_s * side_power_gain * power_gain);
             }
         };
         
