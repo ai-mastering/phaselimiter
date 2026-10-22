@@ -62,17 +62,27 @@ jobs:
         with:
           submodules: recursive
       - uses: ./.github/actions/build-environment
+      - uses: actions/cache@v4
+        with:
+          path: build/ccache-sanitizers
+          key: linux-ccache-sanitizers-${{ hashFiles('environment/dependencies.json', 'Dockerfile') }}-${{ github.sha }}
+          restore-keys: |
+            linux-ccache-sanitizers-${{ hashFiles('environment/dependencies.json', 'Dockerfile') }}-
       - name: Build and test with ASan and UBSan
         run: |
           docker run --rm --user "$(id -u):$(id -g)" \
             --mount "type=bind,src=$PWD,dst=/workspace" --workdir /workspace \
-            -e HOME=/tmp -e ASAN_OPTIONS=detect_leaks=1:halt_on_error=1 \
+            -e HOME=/tmp -e CCACHE_DIR=/workspace/build/ccache-sanitizers \
+            -e ASAN_OPTIONS=detect_leaks=1:halt_on_error=1 \
             -e UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1 \
             phaselimiter-build:ci bash -euo pipefail -c '
+              ccache --zero-stats
               cmake -S . -B build/sanitizers -G Ninja -DCMAKE_BUILD_TYPE=Debug \
+                -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
                 -DSANDYBRIDGE_SUPPORT=ON -DBUILD_TESTING=ON -DPHASELIMITER_SANITIZERS=ON \
                 -DCMAKE_EXE_LINKER_FLAGS=-no-pie
               cmake --build build/sanitizers --parallel 2
+              ccache --show-stats
               ctest --test-dir build/sanitizers --output-on-failure --output-junit results.xml
             '
       - uses: actions/upload-artifact@v4

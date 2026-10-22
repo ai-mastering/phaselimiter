@@ -21,6 +21,11 @@ jobs:
           environment-file: environment/windows.yml
           miniforge-version: latest
           auto-activate-base: false
+      - name: Cache legacy SDK downloads
+        uses: actions/cache@v4
+        with:
+          path: build/downloads
+          key: windows-sdk-downloads-${{ hashFiles('environment/dependencies.json') }}
       - name: Fetch pinned legacy SDKs
         run: |
           python script/fetch_build_dependencies.py --platform windows \

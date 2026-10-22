@@ -327,6 +327,10 @@ Windows CI builds Release with unit tests enabled and runs CTest before CLI
 integration and packaging. CTest logs and a JUnit report are uploaded even when
 tests fail.
 
+Linux Release, Debug, and sanitizer builds cache compilation results separately
+with ccache and log per-build hit statistics. Windows caches legacy SDK archives;
+the fetch script still verifies their pinned checksums before extraction.
+
 The Linux sanitizer job builds project code (including `deps/bakuage`) with
 ASan, UBSan, and libstdc++ assertions, then runs CTest. GCC builds additionally
 enable `-fsanitize=bounds-strict`; Clang builds use the shared ASan/UBSan settings.

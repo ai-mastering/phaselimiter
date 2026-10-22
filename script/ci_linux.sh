@@ -13,11 +13,13 @@ if [ "$configuration" = Release ]; then
   python3 script/prepare_dataset.py --destination build/dataset
   dataset_option=("-DPHASELIMITER_TEST_DATA_DIR=$PWD/build/dataset/analysis_shortpath")
 fi
+ccache --zero-stats
 cmake -S . -B "$build_dir" -G Ninja \
   -DCMAKE_BUILD_TYPE="$configuration" -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
   -DSANDYBRIDGE_SUPPORT=ON -DBUILD_TESTING=ON \
   -DPHASELIMITER_BUILD_BENCHMARKS="$benchmarks" "${dataset_option[@]}"
 cmake --build "$build_dir" --parallel 2
+ccache --show-stats
 ctest --test-dir "$build_dir" --output-on-failure
 
 if [ "$configuration" = Release ]; then
