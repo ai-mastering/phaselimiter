@@ -4,6 +4,8 @@
 #include <iostream>
 #include <memory>
 #include <mutex>
+#include <new>
+#include <stdexcept>
 #include <unordered_map>
 #include "ipp.h"
 #include "bakuage/utils.h"
@@ -590,32 +592,34 @@ namespace {
 }
 
 namespace bakuage {
-    FftMemoryBuffer::FftMemoryBuffer(int size): size_(size), data_(size ? ippsMalloc_8u(size) : nullptr) {
-		if (size_) std::memset(data_, 0, size_);
-	}
+    FftMemoryBuffer::FftMemoryBuffer(int size): size_(size), data_(nullptr) {
+        if (size < 0) throw std::invalid_argument("FFT buffer size must be nonnegative");
+        if (size == 0) return;
+        data_ = ippsMalloc_8u(size);
+        if (!data_) throw std::bad_alloc();
+        std::memset(data_, 0, size);
+    }
 
     FftMemoryBuffer::~FftMemoryBuffer() {
         if (data_) ippsFree(data_);
     }
-    
-    FftMemoryBuffer::FftMemoryBuffer(const FftMemoryBuffer& x): size_(x.size_), data_(size_ ? ippsMalloc_8u(size_) : nullptr) {
-		if (size_) {
-			std::memcpy(data_, x.data_, size_);
-		}
+
+    FftMemoryBuffer::FftMemoryBuffer(const FftMemoryBuffer& x): FftMemoryBuffer(x.size_) {
+        if (size_) std::memcpy(data_, x.data_, size_);
     }
     FftMemoryBuffer::FftMemoryBuffer(FftMemoryBuffer&& x): size_(x.size_), data_(x.data_) {
         x.size_ = 0;
         x.data_ = nullptr;
     }
     FftMemoryBuffer& FftMemoryBuffer::operator=(const FftMemoryBuffer& x) {
-        size_ = x.size_;
-        data_ = size_ ? ippsMalloc_8u(size_) : nullptr;
-		if (size_) {
-			std::memcpy(data_, x.data_, size_);
-		}
+        if (this == &x) return *this;
+        FftMemoryBuffer copy(x);
+        *this = std::move(copy);
         return *this;
     }
     FftMemoryBuffer& FftMemoryBuffer::operator=(FftMemoryBuffer&& x) {
+        if (this == &x) return *this;
+        if (data_) ippsFree(data_);
         size_ = x.size_;
         data_ = x.data_;
         x.size_ = 0;
@@ -734,7 +738,7 @@ namespace bakuage {
             dft->ExecuteInvPack(input, output, work_data);
         }
     }
-    size_t RealDft<float>::work_size() const {
+    int RealDft<float>::work_size() const {
         const auto dft = (MyIppR2CDft32 *)dft_ptr_;
         const auto fft = (MyIppR2CFft32 *)fft_ptr_;
         return (std::max)(dft->workBufferSize, fft->workBufferSize);
@@ -793,7 +797,7 @@ namespace bakuage {
             dft->ExecuteInvPack(input, output, work_data);
         }
     }
-    size_t RealDft<double>::work_size() const {
+    int RealDft<double>::work_size() const {
         const auto dft = (MyIppR2CDft64 *)dft_ptr_;
         const auto fft = (MyIppR2CFft64 *)fft_ptr_;
         return (std::max)(dft->workBufferSize, fft->workBufferSize);

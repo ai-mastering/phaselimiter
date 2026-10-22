@@ -89,7 +89,9 @@ CmaesResult OptimizeCmaes(
     };
     libcmaes::CMAStrategy<libcmaes::ACovarianceUpdate, Transform> strategy(evaluate, parameters);
     const auto evaluate_batch = [&](const dMat &candidates, const dMat &phenotypes) {
-        const int count = std::min<int>(candidates.cols(), max_evaluations - evaluations);
+        // Clamp in Eigen's index type before narrowing to the int budget.
+        const int count = static_cast<int>(std::min<Eigen::Index>(
+            candidates.cols(), max_evaluations - evaluations));
         if (count == 0) throw BudgetExhausted{};
         // Select the prefix before starting workers. A partial final generation
         // must evaluate the same candidates for every thread count.

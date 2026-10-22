@@ -24,7 +24,7 @@ namespace {
                 const double s = d_max / (s1 * freqs[i] + s2);
                 for (int j = i + 1; j < count; j++) {
                     const double x = s * (freqs[j] - freqs[i]);
-                    row[j - i - 1] = std::exp(-a * x) - std::exp(-b * x);
+                    row[j - i - 1] = static_cast<Float>(std::exp(-a * x) - std::exp(-b * x));
                     
                     if (x > 10 || j == count - 1) { // d < 6.4e-16 when x > 10
                         row.resize(j - i);
@@ -78,7 +78,9 @@ namespace {
             for (int i = 0; i < count; i++) {
                 double s = 0;
 #if 1
-                s = bakuage::VectorDot(amps + i + 1, cache->ds[i].data(), cache->ds[i].size());
+                // Cache rows are constructed with at most count (int) elements.
+                s = bakuage::VectorDot(amps + i + 1, cache->ds[i].data(),
+                    static_cast<int>(cache->ds[i].size()));
 #else
                 for (int j = 0; j < cache->ds[i].size(); j++) {
                     s += amps[i + j + 1] * cache->ds[i][j];
@@ -137,7 +139,7 @@ namespace bakuage {
         bakuage::CopyHanning(width, window.begin());
         bakuage::AlignedPodVector<float> freqs(spec_len);
         for (int i = 0; i < spec_len; i++) {
-            freqs[i] = 1.0 * (i + 0.5) * sample_freq / width;
+            freqs[i] = static_cast<float>(1.0 * (i + 0.5) * sample_freq / width);
         }
         DissonanceSethares1993Cache<float> cache(freqs.data(), spec_len);
         
@@ -152,8 +154,8 @@ namespace bakuage {
         }
         std::vector<std::shared_ptr<CalculateDissonanceThreadVar>> allocated_thread_vars(pos_list.size());
         
-        const auto reduce_loop_func = [&](tbb::blocked_range<int> r, CalculateDissonanceResult init) {
-            for (int pos_list_i = r.begin(); pos_list_i != r.end(); pos_list_i++) {
+        const auto reduce_loop_func = [&](tbb::blocked_range<size_t> r, CalculateDissonanceResult init) {
+            for (size_t pos_list_i = r.begin(); pos_list_i != r.end(); pos_list_i++) {
                 const int pos = pos_list[pos_list_i];
                 auto tv = CalculateDissonanceThreadVar::GetThreadInstance(width);
                 allocated_thread_vars[pos_list_i] = tv;
@@ -188,14 +190,14 @@ namespace bakuage {
         result.energy = 0;
         
         if (tbb_parallel) {
-            result = tbb::parallel_reduce(tbb::blocked_range<int>(0, pos_list.size()), result, reduce_loop_func, reduce_func);
+            result = tbb::parallel_reduce(tbb::blocked_range<size_t>(0, pos_list.size()), result, reduce_loop_func, reduce_func);
         } else {
-            result = reduce_loop_func(tbb::blocked_range<int>(0, pos_list.size()), result);
+            result = reduce_loop_func(tbb::blocked_range<size_t>(0, pos_list.size()), result);
         }
         
-        *dissonance = result.dissonance
+        *dissonance = static_cast<Float>(result.dissonance
         * (1.0 * sample_freq / width) // compensation
-        / (1e-37 + result.energy);
+        / (1e-37 + result.energy));
     }
     
     template

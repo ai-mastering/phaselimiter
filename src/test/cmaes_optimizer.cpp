@@ -135,7 +135,7 @@ TEST(CmaesOptimizer, StrictSmallBudgetsAndBaselineFallback) {
             [&](const std::vector<double> &) { ++calls; return 1.0; },
             {0, 0}, 0, {-1, -1}, {1, 1}, budget, 1);
         EXPECT_LE(calls, budget);
-        if (budget > 0) EXPECT_GT(calls, 0);
+        if (budget > 0) { EXPECT_GT(calls, 0); }
         EXPECT_EQ(result.params, (std::vector<double>{0, 0}));
         EXPECT_EQ(result.value, 0);
     }

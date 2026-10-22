@@ -128,7 +128,8 @@ namespace bakuage {
         void BackwardPack(const Float *input, Float *output) {
             BackwardPack(input, output, work_.data());
         }
-        size_t work_size() const;
+        // IPP reports workspace sizes as int.
+        int work_size() const;
     private:
         const void *dft_ptr_;
         const void *fft_ptr_;
@@ -166,7 +167,8 @@ namespace bakuage {
         void BackwardPack(const Float *input, Float *output) {
             BackwardPack(input, output, work_.data());
         }
-        size_t work_size() const;
+        // IPP reports workspace sizes as int.
+        int work_size() const;
     private:
         const void *dft_ptr_;
         const void *fft_ptr_;

@@ -229,7 +229,7 @@ modified or used as a generation destination.
 | `BUILD_TESTING` | `ON` | Build the C++ tests and run the CLI smoke check |
 | `PHASELIMITER_BUILD_BENCHMARKS` | `OFF` | Build `bench`; requires Google Benchmark |
 | `SANDYBRIDGE_SUPPORT` | `OFF` | Target AVX rather than AVX2/FMA |
-| `PHASELIMITER_WARNINGS_AS_ERRORS` | `OFF` | Treat project warnings as errors |
+| `PHASELIMITER_WARNINGS_AS_ERRORS` | `ON` | Treat project warnings as errors (GCC/Clang only; MSVC keeps warnings nonfatal) |
 | `PHASELIMITER_STATIC_BOOST` | Unix: `ON`, Windows: `OFF` | Prefer static Boost libraries |
 | `PHASELIMITER_TEST_DATA_DIR` | empty | Enable external dataset validation |
 

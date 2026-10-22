@@ -4,6 +4,9 @@
 #include <algorithm>
 #include <complex>
 #include <cstring>
+#include <cstddef>
+#include <limits>
+#include <stdexcept>
 #include "bakuage/dft.h"
 #include "bakuage/memory.h"
 #include "bakuage/vector_math.h"
@@ -17,7 +20,7 @@ namespace bakuage {
     class FirFilter2 {
     public:
         FirFilter2(int len):
-        fir_size_(len),
+        fir_size_(ValidateFirSize(len)),
         fir_spec_(ExtendedSpecSizeFromFirSize(len)),
         fir_spec_double_(ExtendedSpecSizeFromFirSize(len)),
         work_(ExtendedSizeFromFirSize(len)),
@@ -30,7 +33,7 @@ namespace bakuage {
         {}
         
         template <typename Iterator>
-        FirFilter2(Iterator bg, Iterator ed): FirFilter2(std::distance(bg, ed)) {
+        FirFilter2(Iterator bg, Iterator ed): FirFilter2(ValidateFirSize(std::distance(bg, ed))) {
             UpdateFir(bg, ed);
         }
         
@@ -59,17 +62,27 @@ namespace bakuage {
         int max_process_len() const { return extended_size() - fir_size() + 1; }
 
         void Clock(const Float *bg, const Float *ed, Float *output) {
-            const int max_process_len = this->max_process_len();
-            while (ed - bg > max_process_len) {
-                DoClock(bg, bg + max_process_len, output);
-                bg += max_process_len;
-                output += max_process_len;
-            }
-            if (ed - bg > 0) {
-                DoClock(bg, ed, output);
+            if (bg == ed) return;
+            std::ptrdiff_t remaining = ed - bg;
+            if (remaining < 0) throw std::invalid_argument("FIR input range is reversed");
+            const int block_size = max_process_len();
+            while (remaining > 0) {
+                const int count = static_cast<int>(std::min<std::ptrdiff_t>(remaining, block_size));
+                DoClock(bg, count, output);
+                bg += count;
+                output += count;
+                remaining -= count;
             }
         };
     private:
+        static int ValidateFirSize(std::ptrdiff_t size) {
+            if (size <= 0) throw std::invalid_argument("FIR length must be positive");
+            // Twice the rounded FFT size must still fit in int.
+            if (size > std::numeric_limits<int>::max() / 8 + 1) {
+                throw std::length_error("FIR length exceeds DSP size limit");
+            }
+            return static_cast<int>(size);
+        }
         static int ExtendedSizeFromFirSize(int fir_size) {
             return CeilPowerOf2(2 * fir_size);
         }
@@ -78,9 +91,11 @@ namespace bakuage {
             return ExtendedSizeFromFirSize(fir_size) / 2;// + 1;
         }
         
-        // ed - bg <= max_process_len
-        void DoClock(const Float *bg, const Float *ed, Float *output) {
-            const int len = ed - bg;
+        // 0 < len <= max_process_len()
+        void DoClock(const Float *bg, int len, Float *output) {
+            if (len <= 0 || len > max_process_len()) {
+                throw std::invalid_argument("Invalid FIR block length");
+            }
             const int convolved_size = fir_size() + len - 1;
             
             // fft src

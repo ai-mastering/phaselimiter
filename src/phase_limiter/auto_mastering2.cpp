@@ -100,7 +100,7 @@ public:
 		}
 
 		array bands_json = root.at("bands").get<array>();
-		for (const auto band_json : bands_json) {
+		for (const auto &band_json : bands_json) {
 			bands.push_back(Band(band_json.get<object>()));
 		}
 	}

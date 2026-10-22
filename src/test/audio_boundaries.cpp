@@ -2,6 +2,9 @@
 
 #include <algorithm>
 #include <cmath>
+#include <limits>
+#include <stdexcept>
+#include <utility>
 #include <vector>
 
 #include "audio_analyzer/peak.h"
@@ -141,4 +144,37 @@ TEST(AudioBoundaries, ShortInterleavedPeakAndRms) {
             EXPECT_NEAR(-740.0f, peak, 1e-4);
         }
     }
+}
+
+TEST(AudioBoundaries, FirRejectsInvalidLengthsAndRanges) {
+    EXPECT_THROW(bakuage::FirFilter2<float>(0), std::invalid_argument);
+    EXPECT_THROW(bakuage::FirFilter2<float>(-1), std::invalid_argument);
+    EXPECT_THROW((bakuage::FirFilter2<float>(std::numeric_limits<int>::max())), std::length_error);
+    const float coefficients[] = {0.25f, 0.5f, 0.25f};
+    EXPECT_THROW((bakuage::FirFilter2<float>(coefficients + 3, coefficients)), std::invalid_argument);
+    bakuage::FirFilter2<float> filter(coefficients, coefficients + 3);
+    float output = -99;
+    EXPECT_THROW(filter.Clock(coefficients + 3, coefficients, &output), std::invalid_argument);
+    EXPECT_FLOAT_EQ(-99, output);
+}
+
+TEST(AudioBoundaries, FftBufferValidationAndCopies) {
+    EXPECT_THROW(bakuage::FftMemoryBuffer(-1), std::invalid_argument);
+    bakuage::FftMemoryBuffer empty;
+    EXPECT_EQ(nullptr, empty.data());
+    bakuage::FftMemoryBuffer buffer(16);
+    auto *bytes = static_cast<unsigned char *>(buffer.data());
+    for (int i = 0; i < 16; ++i) EXPECT_EQ(0, bytes[i]);
+    bytes[0] = 42;
+    bakuage::FftMemoryBuffer copy(buffer);
+    bytes[0] = 7;
+    EXPECT_EQ(42, static_cast<unsigned char *>(copy.data())[0]);
+    copy = buffer;
+    EXPECT_EQ(7, static_cast<unsigned char *>(copy.data())[0]);
+    copy = copy;
+    EXPECT_EQ(7, static_cast<unsigned char *>(copy.data())[0]);
+    copy = std::move(buffer);
+    EXPECT_EQ(7, static_cast<unsigned char *>(copy.data())[0]);
+    EXPECT_EQ(nullptr, buffer.data());
+    EXPECT_EQ(0, buffer.size());
 }

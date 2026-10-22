@@ -21,7 +21,7 @@ option(PHASELIMITER_SANITIZERS "Enable ASan/UBSan and libstdc++ assertions (GCC/
 
 option(SANDYBRIDGE_SUPPORT "Target AVX instead of AVX2/FMA (x86 only)" OFF)
 option(PHASELIMITER_BUILD_BENCHMARKS "Build Google Benchmark executables" OFF)
-option(PHASELIMITER_WARNINGS_AS_ERRORS "Treat project warnings as errors" OFF)
+option(PHASELIMITER_WARNINGS_AS_ERRORS "Treat project warnings as errors (GCC/Clang only)" ON)
 option(PHASELIMITER_STATIC_BOOST "Prefer static Boost libraries" ${UNIX})
 
 # Accept old command lines while keeping tests and benchmarks independent.

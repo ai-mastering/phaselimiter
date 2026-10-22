@@ -87,8 +87,8 @@ namespace bakuage {
     private:
         Config config_;
         bool bypass_;
-        int up_factor_;
-        int down_factor_;
+        int up_factor_ = 1;
+        int down_factor_ = 1;
         bakuage::AlignedPodVector<Float> fir_;
         std::unique_ptr<bakuage::DelayFilter<Float>> delay_filter_;
     };

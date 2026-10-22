@@ -3,6 +3,7 @@
 #define BAKUAGE_BAKUAGE_WINDOW_FUNC_H_
 
 #include <cmath>
+#include <iterator>
 #include "bakuage/bessel.h"
 #include "bakuage/memory.h"
 #include "bakuage/utils.h"
@@ -32,7 +33,8 @@ template <class Iterator>
 void CopyHanning(int n, Iterator it, double scale = 1.0) {
 	const double delta = 2 * M_PI / n;
 	for (int i = 0; i < n; i++) {
-		*it = std::max<double>(0, 0.5 - 0.5 * std::cos(delta * i)) * scale;
+		*it = static_cast<typename std::iterator_traits<Iterator>::value_type>(
+            std::max<double>(0, 0.5 - 0.5 * std::cos(delta * i)) * scale);
 		++it;
 	}
 }
@@ -42,7 +44,8 @@ void CopyBlackmanHarris(int n, Iterator it, double scale = 1.0) {
 	const double delta = 2 * M_PI / n;
 	for (int i = 0; i < n; i++) {
 		const auto theta = delta * i;
-		*it = (0.35875 - 0.48829 * std::cos(theta) + 0.14128 * std::cos(2 * theta) - 0.01168 * std::cos(3 * theta)) * scale;
+		*it = static_cast<typename std::iterator_traits<Iterator>::value_type>(
+            (0.35875 - 0.48829 * std::cos(theta) + 0.14128 * std::cos(2 * theta) - 0.01168 * std::cos(3 * theta)) * scale);
 		++it;
 	}
 }
