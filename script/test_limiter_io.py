@@ -59,6 +59,67 @@ def main():
             assert message in result.stderr, result.stderr
             assert target.read_bytes() == b'original'
 
+        # Missing input and FFmpeg prove these fail before opening/converting audio.
+        invalid_cases = [
+            (['--worker_count=-3'], 'worker_count'),
+            (['--test_mode=typo'], 'test_mode'),
+            (['--input='], 'input'),
+            (['--output='], 'output'),
+            (['--output_format=flac'], 'output_format'),
+            (['--reference_mode=typo'], 'reference_mode'),
+            (['--limiting_mode=typo'], 'limiting_mode'),
+            (['--ceiling_mode=typo'], 'ceiling_mode'),
+            (['--noise_update_mode=typo'], 'noise_update_mode'),
+            (['--max_available_freq_mode=typo'], 'max_available_freq_mode'),
+            (['--sample_rate=0'], 'sample_rate'),
+            (['--bit_depth=8'], 'bit_depth'),
+            (['--true_peak_oversample=0'], 'true_peak_oversample'),
+            (['--true_peak_oversample=2147483647'], 'true_peak_oversample'),
+            (['--reference=nan'], 'reference must be finite'),
+            (['--ceiling=inf'], 'ceiling must be finite'),
+            (['--low_cut_freq=-1'], 'low_cut_freq'),
+            (['--high_cut_freq=22050'], 'high_cut_freq'),
+            (['--low_cut_freq=1000', '--high_cut_freq=500'], 'below'),
+            (['--ceiling_mode=lowpass_true_peak', '--lowpass_true_peak_cut_freq=0'],
+             'lowpass_true_peak_cut_freq'),
+            (['--noise_update_min_noise=0'], 'noise levels'),
+            (['--absolute_min_noise=-1'], 'noise levels'),
+            (['--max_iter1=0'], 'max_iter1'),
+            (['--max_iter2=-1'], 'max_iter2'),
+            (['--pre_compression=true', '--pre_compression_mean_sec=0'], 'pre_compression_mean_sec'),
+            (['--mastering', '--mastering_mode=typo'], 'mastering_mode'),
+            (['--mastering', '--mastering_mode=mastering3', '--mastering3_iteration=0'],
+             'mastering3_iteration'),
+            (['--mastering', '--mastering_mode=mastering5',
+              '--mastering5_optimization_algorithm=typo'], 'mastering5_optimization_algorithm'),
+            (['--mastering', '--mastering_mode=mastering5',
+              '--mastering5_optimization_max_eval_count=0'], 'mastering5_optimization_max_eval_count'),
+        ]
+        for flags, message in invalid_cases:
+            target.write_bytes(b'original')
+            intermediate = root / 'preserved.wav'
+            intermediate.write_bytes(b'original intermediate')
+            scratch = root / 'unused temporary'
+            command = base + [f'--input={root / "missing.wav"}',
+                              f'--ffmpeg={root / "missing-ffmpeg"}',
+                              f'--tmp={scratch}',
+                              f'--output_after_pre_compression={intermediate}'] + flags
+            result = subprocess.run(command, capture_output=True, text=True, timeout=10)
+            assert result.returncode != 0, flags
+            assert message in result.stderr, (flags, result.stderr)
+            assert 'Ipp initialized' not in result.stderr, result.stderr
+            assert not scratch.exists(), flags
+            assert target.read_bytes() == b'original'
+            assert intermediate.read_bytes() == b'original intermediate'
+
+        help_result = subprocess.run([str(tool), '--helpfull'],
+                                     capture_output=True, text=True, timeout=10)
+        help_text = help_result.stdout + help_result.stderr
+        assert 'Output formats: WAV' in help_text, help_text
+        assert 'MP3, AAC' in help_text, help_text
+        assert '32-bit float' in help_text, help_text
+        assert 'default: true' in help_text.split('-quick_exit', 1)[1].split('\n', 1)[0], help_text
+
         ffmpeg = shutil.which('ffmpeg')
         if not ffmpeg:
             print('Input rejection cases passed; FFmpeg integration skipped (not installed)')
@@ -88,6 +149,25 @@ def main():
                     assert audio.getnframes() > 0
                     if disable_encode and output == target:
                         assert audio.getnframes() == 4410, audio.getnframes()
+        # Exercise every documented format, including float WAV and rate conversion.
+        for output_format, bit_depth, rate in [('wav', 16, 44100), ('wav', 24, 48000),
+                                               ('wav', 32, 44100), ('mp3', 16, 44100),
+                                               ('aac', 16, 44100)]:
+            output = root / f'format-{output_format}-{bit_depth}.{output_format}'
+            result = subprocess.run(
+                base + [f'--input={source}', f'--output={output}',
+                        f'--output_format={output_format}', f'--bit_depth={bit_depth}',
+                        f'--sample_rate={rate}'],
+                capture_output=True, text=True, timeout=60)
+            assert result.returncode == 0, result.stderr
+            decoded = root / 'decoded.wav'
+            subprocess.run([ffmpeg, '-v', 'error', '-y', '-i', str(output),
+                            '-acodec', 'pcm_s16le', str(decoded)],
+                           check=True, capture_output=True, timeout=60)
+            with wave.open(str(decoded), 'rb') as audio:
+                assert audio.getnchannels() == 2
+                assert audio.getframerate() == rate
+                assert audio.getnframes() > 0
     print('Limiter input validation and FFmpeg path integration passed')
 
 

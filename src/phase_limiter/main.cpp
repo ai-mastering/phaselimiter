@@ -12,6 +12,8 @@
 #include <stdexcept>
 #include <algorithm>
 #include <fstream>
+#include <initializer_list>
+#include <limits>
 #include <streambuf>
 
 #include "boost/filesystem.hpp"
@@ -94,7 +96,7 @@ DEFINE_double(lowpass_true_peak_cut_freq, 15000, "lowpass true peak cut off freq
 DEFINE_int32(true_peak_oversample, 4, "true peak oversample");
 
 DEFINE_string(output_format, "wav", "output format (wav/mp3/aac)");
-DEFINE_int32(bit_depth, 16, "bit depth (16 or 24)");
+DEFINE_int32(bit_depth, 16, "WAV bit depth (16, 24, or 32; 32 uses floating point)");
 DEFINE_int32(sample_rate, 44100, "Output sample rate (not processing sample rate)");
 
 DEFINE_string(grad_output, "", "grad output path");
@@ -146,8 +148,11 @@ void InitializeGFlags(int *argc, char **argv[]) {
     gflags::SetVersionString("1.0.0-oss");
 
     std::stringstream usage;
-    usage << "Currently, output format is only (44.1kHz, stereo, 16bit, wave).\n"
-        << "So, pre-encode is not supported.";
+    usage << "Audio limiter and automated mastering. Processes stereo audio at 44100 Hz.\n"
+        << "Input is converted with FFmpeg unless --disable_input_encode is set;\n"
+        << "that option requires a stereo 44100 Hz WAV.\n"
+        << "Output formats: WAV (16/24-bit PCM or 32-bit float), MP3, AAC.\n"
+        << "Use --sample_rate to select the output sample rate.";
     gflags::SetUsageMessage(usage.str());
 
     gflags::ParseCommandLineFlags(argc, argv, true);
@@ -416,9 +421,19 @@ void EncodeAvoidingClipping(const std::string &input, const std::string &output,
 	}
 }
 
-void MainFunc() {
-    typedef float Float;
-
+void ValidateFlags() {
+    const auto require = [](bool valid, const std::string &message) {
+        if (!valid) throw std::invalid_argument(message);
+    };
+    const auto choice = [&require](const char *name, const std::string &value,
+                                   std::initializer_list<const char *> allowed) {
+        require(std::find(allowed.begin(), allowed.end(), value) != allowed.end(),
+                std::string(name) + ": unknown value " + value);
+    };
+    // Reject invalid configuration before SDK initialization, temporary files or FFmpeg.
+    require(FLAGS_worker_count >= 0, "worker_count must be nonnegative (0: auto)");
+    choice("test_mode", FLAGS_test_mode, {"", "grad", "grad_calculator", "perfect_hash_power_of_2"});
+    if (!FLAGS_test_mode.empty()) return;
 #ifndef PHASELIMITER_ENABLE_FFTW
     if (FLAGS_enhancement || FLAGS_freq_expansion) {
         throw std::runtime_error("--enhancement and --freq_expansion require FFTW support, which is unavailable in this build");
@@ -426,9 +441,81 @@ void MainFunc() {
 #endif
     phase_limiter::CheckedOversamplingFactor(
         FLAGS_limiter_external_oversample, FLAGS_limiter_internal_oversample);
-    if (!std::isfinite(FLAGS_start_at) || !std::isfinite(FLAGS_end_at)) {
-        throw std::invalid_argument("start_at and end_at must be finite");
+
+    require(!FLAGS_input.empty(), "input must not be empty");
+    require(!FLAGS_output.empty(), "output must not be empty");
+    choice("output_format", FLAGS_output_format, {"wav", "mp3", "aac"});
+    choice("reference_mode", FLAGS_reference_mode, {"loudness", "youtube_loudness", "rms", "peak", "zero"});
+    choice("limiting_mode", FLAGS_limiting_mode, {"phase", "simple"});
+    choice("ceiling_mode", FLAGS_ceiling_mode, {"peak", "true_peak", "lowpass_true_peak"});
+    choice("noise_update_mode", FLAGS_noise_update_mode, {"linear", "adaptive"});
+    choice("max_available_freq_mode", FLAGS_max_available_freq_mode, {"disabled", "detect"});
+    require(FLAGS_sample_rate > 0, "sample_rate must be positive");
+    if (FLAGS_output_format == "wav") {
+        require(FLAGS_bit_depth == 16 || FLAGS_bit_depth == 24 || FLAGS_bit_depth == 32,
+                "bit_depth must be 16, 24, or 32 for WAV");
     }
+    require(FLAGS_true_peak_oversample > 0 &&
+            FLAGS_true_peak_oversample <= (std::numeric_limits<int>::max() - 1) / 1024,
+            "true_peak_oversample must be positive and fit the FIR size");
+    require(std::isfinite(FLAGS_freq_expansion_ratio), "freq_expansion_ratio must be finite");
+    require(std::isfinite(FLAGS_mastering_reverb_gain), "mastering_reverb_gain must be finite");
+    require(std::isfinite(FLAGS_mastering_reverb_drr_range), "mastering_reverb_drr_range must be finite");
+    require(std::isfinite(FLAGS_mastering_reverb_predelay), "mastering_reverb_predelay must be finite");
+    require(std::isfinite(FLAGS_mastering_reverb_target_drr), "mastering_reverb_target_drr must be finite");
+    require(std::isfinite(FLAGS_mastering_matching_level), "mastering_matching_level must be finite");
+    require(std::isfinite(FLAGS_mastering_ms_matching_level), "mastering_ms_matching_level must be finite");
+    require(std::isfinite(FLAGS_mastering3_target_sn), "mastering3_target_sn must be finite");
+    require(std::isfinite(FLAGS_mastering5_mastering_level), "mastering5_mastering_level must be finite");
+    require(std::isfinite(FLAGS_reference), "reference must be finite");
+    require(std::isfinite(FLAGS_pre_compression_threshold), "pre_compression_threshold must be finite");
+    require(std::isfinite(FLAGS_pre_compression_mean_sec), "pre_compression_mean_sec must be finite");
+    require(std::isfinite(FLAGS_start_at), "start_at must be finite");
+    require(std::isfinite(FLAGS_end_at), "end_at must be finite");
+    require(std::isfinite(FLAGS_low_cut_freq), "low_cut_freq must be finite");
+    require(std::isfinite(FLAGS_high_cut_freq), "high_cut_freq must be finite");
+    require(std::isfinite(FLAGS_ceiling), "ceiling must be finite");
+    require(std::isfinite(FLAGS_lowpass_true_peak_cut_freq), "lowpass_true_peak_cut_freq must be finite");
+    require(std::isfinite(FLAGS_limiting_error_spectrogram_gain), "limiting_error_spectrogram_gain must be finite");
+    require(std::isfinite(FLAGS_noise_update_min_noise), "noise_update_min_noise must be finite");
+    require(std::isfinite(FLAGS_noise_update_initial_noise), "noise_update_initial_noise must be finite");
+    require(std::isfinite(FLAGS_noise_update_fista_enable_ratio), "noise_update_fista_enable_ratio must be finite");
+    require(std::isfinite(FLAGS_absolute_min_noise), "absolute_min_noise must be finite");
+    require(FLAGS_low_cut_freq >= 0 && FLAGS_low_cut_freq < 22050 &&
+            FLAGS_high_cut_freq >= 0 && FLAGS_high_cut_freq < 22050,
+            "low_cut_freq and high_cut_freq must be in [0, 22050)");
+    require(FLAGS_low_cut_freq == 0 || FLAGS_high_cut_freq == 0 ||
+            FLAGS_low_cut_freq < FLAGS_high_cut_freq,
+            "low_cut_freq must be below high_cut_freq when both are enabled");
+    require(FLAGS_ceiling_mode != "lowpass_true_peak" || (FLAGS_lowpass_true_peak_cut_freq > 0 &&
+            FLAGS_lowpass_true_peak_cut_freq <= std::min(44100, FLAGS_sample_rate) / 2.0),
+            "lowpass_true_peak_cut_freq must be positive and at most the output Nyquist frequency");
+    require(FLAGS_noise_update_min_noise > 0 && FLAGS_noise_update_initial_noise > 0 &&
+            FLAGS_absolute_min_noise > 0, "noise levels must be positive");
+    require(FLAGS_max_iter1 > 0 && FLAGS_max_iter2 > 0, "max_iter1 and max_iter2 must be positive");
+    if (!FLAGS_limiting_error_spectrogram_output.empty()) {
+        require(FLAGS_limiting_error_spectrogram_width > 0 && FLAGS_limiting_error_spectrogram_height > 0,
+                "limiting error spectrogram dimensions must be positive");
+    }
+    if (FLAGS_pre_compression) {
+        require(FLAGS_pre_compression_mean_sec > 0, "pre_compression_mean_sec must be positive");
+    }
+    if (FLAGS_mastering) {
+        choice("mastering_mode", FLAGS_mastering_mode, {"classic", "mastering2", "mastering3", "mastering5"});
+        if (FLAGS_mastering_mode == "mastering3") {
+            require(FLAGS_mastering3_iteration > 0, "mastering3_iteration must be positive");
+        }
+        if (FLAGS_mastering_mode == "mastering5") {
+            choice("mastering5_optimization_algorithm", FLAGS_mastering5_optimization_algorithm,
+                   {"de", "nm", "pso", "de_prmm", "pso_dv", "cmaes"});
+            require(FLAGS_mastering5_optimization_max_eval_count > 0,
+                    "mastering5_optimization_max_eval_count must be positive");
+        }
+    }
+}
+
+void MainFunc() {
+    typedef float Float;
 
 	StopWatch stop_watch;
 	stop_watch.Start();
@@ -766,6 +853,7 @@ int main(int argc, char* argv[]) {
 
     try {
         InitializeGFlags(&argc, &argv);
+        ValidateFlags();
 
         PrintMemoryUsage();
 
