@@ -124,6 +124,22 @@ def main():
         if not ffmpeg:
             print('Input rejection cases passed; FFmpeg integration skipped (not installed)')
             return
+        # Run the phase limiter, then let normal process teardown destroy SDK/thread state.
+        # A positive reference forces limiting rather than just copying a quiet signal.
+        for workers in (1, 2):
+            output = root / f'normal-exit-{workers}.wav'
+            result = subprocess.run(
+                base + ['--disable_input_encode', '--quick_exit=false',
+                        '--reference=3', '--max_iter1=2', '--max_iter2=8',
+                        f'--worker_count={workers}', f'--output={output}'],
+                capture_output=True, text=True, timeout=60)
+            assert result.returncode == 0, (workers, result.returncode, result.stderr)
+            with wave.open(str(output), 'rb') as audio:
+                assert audio.getnchannels() == 2
+                assert audio.getframerate() == 44100
+                assert audio.getnframes() == 44100 // 4
+                assert any(audio.readframes(audio.getnframes()))
+
         # The executable path and both audio paths contain shell-sensitive characters.
         executable = root / ('ffmpeg space $ & tool' + Path(ffmpeg).suffix)
         shutil.copy2(ffmpeg, executable)
