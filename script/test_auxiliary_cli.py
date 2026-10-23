@@ -8,6 +8,7 @@ import struct
 import subprocess
 import tempfile
 import wave
+import zlib
 
 
 def check_tools(bin_dir, output, valgrind=False):
@@ -37,12 +38,24 @@ def check_tools(bin_dir, output, valgrind=False):
             result.check_returncode()
         return (work / (name + '.stdout')).read_bytes()
 
+    def write_png(path, width, height, depth, color_type, rows):
+        def chunk(kind, data):
+            return struct.pack('>I', len(data)) + kind + data + struct.pack('>I', zlib.crc32(kind + data))
+        path.write_bytes(b'\x89PNG\r\n\x1a\n' +
+            chunk(b'IHDR', struct.pack('>IIBBBBB', width, height, depth, color_type, 0, 0, 0)) +
+            chunk(b'IDAT', zlib.compress(b''.join(b'\0' + row for row in rows))) + chunk(b'IEND', b''))
+
+    foreground = work / 'foreground.png'
+    write_png(foreground, 65, 49, 8, 6, [bytes(
+        value for x in range(65) for value in
+        ((x * 13) % 256, (y * 17) % 256, (x * 7 + y * 11) % 256, (0, 90, 200, 255)[x % 4]))
+        for y in range(49)])
     image_dir = work / 'visualizer'
     image_dir.mkdir()
-    run('visualizer', [bin_dir / 'audio_visualizer', f'--input={source}',
-        f'--output={image_dir}', f'--background={repo / "test_data/icon_blue.jpg"}',
-        f'--foreground={repo / "test_data/icon_blue.png"}',
-        '--width=640', '--height=360', '--fps=25'], instrument=True)
+    visualizer_flags = [f'--input={source}', f'--background={repo / "test_data/icon_blue.jpg"}',
+        f'--foreground={foreground}', '--width=640', '--height=360', '--fps=25', '--worker_count=8']
+    run('visualizer', [bin_dir / 'audio_visualizer', f'--output={image_dir}',
+        *visualizer_flags], instrument=True)
     images = list(image_dir.glob('*.png'))
     expected_frames = math.ceil(frames * 25 / rate)
     if len(images) != expected_frames or {p.stem for p in images} != {str(i) for i in range(expected_frames)}:
@@ -55,6 +68,62 @@ def check_tools(bin_dir, output, valgrind=False):
     # Decode every frame as well, to reject corrupt/truncated PNG payloads.
     run('decode_visualizer', ['ffmpeg', '-v', 'error', '-xerror', '-i',
         image_dir / '%d.png', '-f', 'null', '-'])
+
+    def decode_images(data, codec):
+        return subprocess.run(['ffmpeg', '-v', 'error', '-xerror', '-threads', '8',
+            '-filter_threads', '8', '-f', 'image2pipe', '-c:v', codec, '-framerate', '25', '-i', '-',
+            '-f', 'rawvideo', '-pix_fmt', 'rgb48le', '-'], input=data,
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True).stdout
+
+    stream = run('visualizer_ppm', [bin_dir / 'audio_visualizer', '--output_format=ppm',
+        *visualizer_flags], instrument=True)
+    png_stream = b''.join((image_dir / f'{i}.png').read_bytes() for i in range(expected_frames))
+    # The legacy --output=- invocation must still produce the original PNG stream.
+    legacy_stream = run('visualizer_png_stdout', [bin_dir / 'audio_visualizer', '--output=-',
+        *visualizer_flags])
+    explicit_png = run('visualizer_png_explicit', [bin_dir / 'audio_visualizer',
+        '--output_format=png', *visualizer_flags])
+    if legacy_stream != png_stream or explicit_png != png_stream:
+        raise AssertionError('Default or explicit PNG stdout differs from directory PNG frames')
+    ppm_dir = work / 'visualizer_ppm'
+    ppm_dir.mkdir()
+    run('visualizer_ppm_directory', [bin_dir / 'audio_visualizer', '--output_format=ppm',
+        f'--output={ppm_dir}', *visualizer_flags])
+    if len(list(ppm_dir.iterdir())) != expected_frames or stream != b''.join(
+            (ppm_dir / f'{i}.ppm').read_bytes() for i in range(expected_frames)):
+        raise AssertionError('PPM directory frames differ from PPM stdout')
+    invalid = subprocess.run([str(bin_dir / 'audio_visualizer'), '--output_format=jpeg'],
+        stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    if invalid.returncode == 0 or invalid.stdout or b'output_format' not in invalid.stderr:
+        raise AssertionError('Unsupported output format was not rejected clearly')
+    decoded_ppm = decode_images(stream, 'ppm')
+    if not stream.startswith(b'P6\n640 360\n255\n') or \
+            len(decoded_ppm) != expected_frames * 640 * 360 * 6 or \
+            decoded_ppm != decode_images(png_stream, 'png'):
+        raise AssertionError('PPM stdout differs from PNG frame pixels or ordering')
+    serial = run('visualizer_ppm_serial', [bin_dir / 'audio_visualizer', '--output=-', '--output_format=ppm',
+        *visualizer_flags, '--worker_count=1'])
+    if serial != stream:
+        raise AssertionError('PPM stdout depends on worker count')
+    # Exercise the real PPM-to-H.264 pipe contract used by callers.
+    subprocess.run(['ffmpeg', '-nostdin', '-v', 'error', '-xerror', '-threads', '8',
+        '-filter_threads', '8', '-f', 'image2pipe', '-c:v', 'ppm', '-framerate', '25', '-i', '-',
+        '-an', '-c:v', 'libx264', '-threads', '8', '-crf', '23', '-maxrate', '4M', '-bufsize', '8M',
+        '-pix_fmt', 'yuv420p', '-f', 'mp4', '-y', str(work / 'visualizer.mp4')],
+        input=stream, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True)
+
+    background16 = work / 'background16.png'
+    write_png(background16, 1, 1, 16, 2, [struct.pack('>3H', 1024, 2048, 4096)])
+    image_dir16 = work / 'visualizer16'
+    image_dir16.mkdir()
+    flags16 = [f'--input={source}', f'--background={background16}',
+        '--width=17', '--height=13', '--fps=25', '--worker_count=8']
+    run('visualizer_png16', [bin_dir / 'audio_visualizer', f'--output={image_dir16}', *flags16])
+    stream16 = run('visualizer_ppm16', [bin_dir / 'audio_visualizer', '--output_format=ppm', *flags16])
+    png16 = b''.join((image_dir16 / f'{i}.png').read_bytes() for i in range(expected_frames))
+    if not stream16.startswith(b'P6\n17 13\n65535\n') or \
+            decode_images(stream16, 'ppm') != decode_images(png16, 'png'):
+        raise AssertionError('PPM stdout did not preserve 16-bit PNG pixels')
 
     spectrum = json.loads(run('spectrogram', [bin_dir / 'spectrogram',
         f'--input={source}'], instrument=True))

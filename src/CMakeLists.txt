@@ -66,10 +66,14 @@ add_executable(spectrogram
 target_link_libraries(spectrogram PRIVATE phaselimiter_cli)
 phaselimiter_enable_warnings(spectrogram)
 
+add_library(audio_visualizer_renderer STATIC audio_visualizer/frame_renderer.cpp)
+target_link_libraries(audio_visualizer_renderer PUBLIC phaselimiter_cli)
+phaselimiter_enable_warnings(audio_visualizer_renderer)
+
 add_executable(audio_visualizer
   audio_visualizer/main.cpp
 )
-target_link_libraries(audio_visualizer PRIVATE phaselimiter_cli)
+target_link_libraries(audio_visualizer PRIVATE audio_visualizer_renderer)
 phaselimiter_enable_warnings(audio_visualizer)
 
 add_executable(clear_mixer
@@ -100,6 +104,11 @@ if(BUILD_TESTING)
     "${PROJECT_SOURCE_DIR}/script/test_auxiliary_cli.py"
     "--bin-dir=$<TARGET_FILE_DIR:audio_visualizer>"
     "--output-dir=${PROJECT_BINARY_DIR}/Testing/auxiliary-cli/$<CONFIG>")
+  add_executable(audio_visualizer_renderer_tests test/audio_visualizer_renderer.cpp)
+  target_link_libraries(audio_visualizer_renderer_tests PRIVATE audio_visualizer_renderer gtest_main)
+  phaselimiter_enable_warnings(audio_visualizer_renderer_tests)
+  add_test(NAME audio-visualizer-renderer COMMAND audio_visualizer_renderer_tests)
+
   add_test(NAME audio-file-boundaries COMMAND "${Python3_EXECUTABLE}"
     "${PROJECT_SOURCE_DIR}/script/test_audio_boundaries.py"
     "--tool=$<TARGET_FILE:snd_file_info>")

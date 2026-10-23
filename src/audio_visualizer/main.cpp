@@ -1,5 +1,10 @@
 #include <cstdio>
 #include <iostream>
+#include <stdexcept>
+#ifdef _WIN32
+#include <fcntl.h>
+#include <io.h>
+#endif
 
 #include "gflags/gflags.h"
 #include "sndfile.h"
@@ -15,12 +20,13 @@
 #include "bakuage/memory.h"
 #include "bakuage/utils.h"
 #include "bakuage/window_func.h"
-#include "bakuage/vector_math.h"
+#include "frame_renderer.h"
 
 DEFINE_bool(quick_exit, true, "quick exit");
 DEFINE_int32(worker_count, 0, "thread count");
 DEFINE_string(input, "", "input wav file path");
-DEFINE_string(output, "", "output directory or - for stdout");
+DEFINE_string(output, "", "output directory; omitted or - writes an image stream to stdout");
+DEFINE_string(output_format, "png", "output image format: png or ppm");
 DEFINE_string(background, "", "background image path");
 DEFINE_string(foreground, "", "foreground image path");
 DEFINE_int32(min_hz, 50, "min freq in hz");
@@ -35,7 +41,7 @@ namespace {
 
 typedef float Float;
 typedef float PixelType;
-    typedef std::shared_ptr<bakuage::AlignedPodVector<char>> BufferPtr;
+    typedef std::shared_ptr<audio_visualizer::FrameRenderer::Buffer> BufferPtr;
 
     void PrintMemoryUsage() {
         std::cerr << "Peak RSS(MB)\t" << bakuage::GetPeakRss() / (1024 * 1024)
@@ -111,52 +117,26 @@ void CalculateSpectrogram(Float *input, int channels, int samples, int sample_fr
     *output = std::move(spectrogram);
 }
 
-void overlay_4ch_on_3ch(const cimg_library::CImg<PixelType> &src, cimg_library::CImg<PixelType> *dest) {
-    // CImgのメモリ配置
-    /*
-     T& operator()(const unsigned int x, const unsigned int y, const unsigned int z, const unsigned int c) {
-     return _data[x + y*(ulongT)_width + z*(ulongT)_width*_height + c*(ulongT)_width*_height*_depth];
-     }
-     */
-
-    bakuage::AlignedPodVector<float> one_minus_alpha(src.width());
-
-    const double scale = 1.0 / 255.0;
-    for (int c = 0; c < 3; c++) {
-        for (int j = 0; j < src.height(); j++) {
-#if 1
-            const PixelType *src_row = &src(0, j, 0, c);
-            const PixelType *src_alpha_row = &src(0, j, 0, 3);
-            PixelType *dest_row = &(*dest)(0, j, 0, c);
-
-            bakuage::VectorSubConstantRev(src_alpha_row, 255.0f, one_minus_alpha.data(), src.width());
-            bakuage::VectorMulInplace(one_minus_alpha.data(), dest_row, src.width());
-            bakuage::VectorMadInplace(src_alpha_row, src_row, dest_row, src.width());
-            bakuage::VectorMulConstantInplace(scale, dest_row, src.width());
-#else
-#if 1
-            // for integer
-            for (int i = 0; i < src.width(); i++) {
-                const PixelType alpha = src(i, j, 0, 3);
-                (*dest)(i, j, 0, c) = ((*dest)(i, j, 0, c) * (255 - alpha) + src(i, j, 0, c) * alpha) >> 8;
-            }
-#else
-            for (int i = 0; i < src.width(); i++) {
-                const double alpha = src(i, j, 0, 3) * scale;
-                (*dest)(i, j, 0, c) = (*dest)(i, j, 0, c) * (1 - alpha) + src(i, j, 0, c) * alpha;
-            }
-#endif
-#endif
-        }
-    }
 }
 
-}
-
-// wavを受け取って、標準出力にrawvideoを出力
+// WAVを受け取って、標準出力に画像ストリーム、またはディレクトリに連番画像を出力
 int main(int argc, char* argv[]) {
     gflags::SetVersionString("1.0.0-oss");
     gflags::ParseCommandLineFlags(&argc, &argv, true);
+
+    if (FLAGS_output_format != "png" && FLAGS_output_format != "ppm") {
+        std::cerr << "output_format must be png or ppm" << std::endl;
+        return 1;
+    }
+    const bool output_stdout = FLAGS_output.empty() || FLAGS_output == "-";
+    const bool output_ppm = FLAGS_output_format == "ppm";
+
+#ifdef _WIN32
+    if (output_stdout && _setmode(_fileno(stdout), _O_BINARY) == -1) {
+        std::cerr << "Failed to set stdout to binary mode" << std::endl;
+        return 1;
+    }
+#endif
 
     ippInit();
     const IppLibraryVersion *lib = ippGetLibVersion();
@@ -248,6 +228,8 @@ int main(int argc, char* argv[]) {
         }
     }
 
+    const audio_visualizer::FrameRenderer renderer(background, foreground, FLAGS_band_count);
+
     auto spectrogram_it = spectrogram.begin();
     const auto spectrogram_end = spectrogram.end();
     const auto filter1_func = [&spectrogram_it, spectrogram_end](tbb::flow_control& fc) -> bakuage::AlignedPodVector<float> * {
@@ -258,64 +240,40 @@ int main(int argc, char* argv[]) {
             return nullptr;
         }
     };
-    const auto filter2_func = [&foreground, &background](bakuage::AlignedPodVector<float> *spectrum){
-        cimg_library::CImg<PixelType> img(FLAGS_width, FLAGS_height, 1, 3, 0);
-
-        // draw background image
-        img = background;
-
-        // draw spectrum
-        cimg_library::CImg<PixelType> spec_img(FLAGS_width, FLAGS_height, 1, 4, 0);
-        spec_img.fill((PixelType)0, 0, 0, 0);
-        for (int i = 0; i < spectrum->size(); i++) {
-            const int block_div = 24;
-            const double center_x = FLAGS_width / 2;
-            const double center_y = FLAGS_height * 0.7;
-            const double spectrum_width = FLAGS_width * 0.5;
-            const double spectrum_height = FLAGS_height * 0.3;
-            const double spectrum_left = center_x - spectrum_width / 2;
-            const double spectrum_bottom = center_y + spectrum_height / 2;
-            const double x1 = spectrum_left + spectrum_width * i / spectrum->size();
-            const double x2 = spectrum_left + spectrum_width * (i + 1) / spectrum->size();
-            const double space_x = (x2 - x1) * 0.5;
-            const int block_count = std::floor((*spectrum)[i] * block_div + 0.5);
-            for (int j = 0; j < block_count; j++) {
-                const double y1 = spectrum_bottom - spectrum_height * (j + 1) / block_div;
-                const double y2 = spectrum_bottom - spectrum_height * j / block_div;
-                const double space_y = (y2 - y1) * 0.5;
-                const PixelType color[4] = { 255, 255, 255, 200 };
-                spec_img.draw_rectangle(x1 + space_x / 2, y1 + space_y / 2, 0, x2 - space_x / 2, y2 - space_y / 2, 1, color);
-            }
+    const auto filter2_func = [&renderer, output_ppm](bakuage::AlignedPodVector<float> *spectrum){
+        if (output_ppm) {
+            return std::make_shared<audio_visualizer::FrameRenderer::Buffer>(renderer.RenderPpm(*spectrum));
         }
-        overlay_4ch_on_3ch(spec_img, &img);
-
-        // alpha blend foreground image
-        overlay_4ch_on_3ch(foreground, &img);
+        const auto img = renderer.RenderImage(*spectrum);
 
         const auto temp_path = bakuage::NormalizeToString((boost::filesystem::temp_directory_path() / boost::filesystem::unique_path()).native());
         // img.save_bmp(output_path.str().c_str()); // slow
         img.save_png(temp_path.c_str());
         BufferPtr buffer;
         bakuage::LoadDataFromFile(temp_path.c_str(), [&buffer](const char *data, size_t size) {
-            buffer = std::make_shared<bakuage::AlignedPodVector<char>>(data, data + size);
+            buffer = std::make_shared<audio_visualizer::FrameRenderer::Buffer>(data, data + size);
         });
         boost::filesystem::remove(temp_path);
         return buffer;
     };
     int spectrogram_i = 0;
-    const auto filter3_func = [&spectrogram_i](BufferPtr buffer) {
-        if (FLAGS_output == "-") {
+    const auto filter3_func = [&spectrogram_i, output_stdout](BufferPtr buffer) {
+        if (output_stdout) {
             const size_t n = std::fwrite(buffer->data(), 1, buffer->size(), stdout);
             if (n != buffer->size()) {
                 throw std::logic_error("failed to write stdout");
             }
         } else {
             std::stringstream output_path;
-            output_path << FLAGS_output << "/" << spectrogram_i++ << ".png";
+            output_path << FLAGS_output << "/" << spectrogram_i++ << "." << FLAGS_output_format;
 
             FILE* pf = std::fopen(output_path.str().c_str(), "wb");
-            std::fwrite(buffer->data(), 1, buffer->size(), pf);
-            std::fclose(pf);
+            if (!pf) throw std::runtime_error("failed to open " + output_path.str());
+            const size_t n = std::fwrite(buffer->data(), 1, buffer->size(), pf);
+            const int close_result = std::fclose(pf);
+            if (n != buffer->size() || close_result != 0) {
+                throw std::runtime_error("failed to write " + output_path.str());
+            }
         }
     };
     tbb::parallel_pipeline(256,
@@ -323,7 +281,9 @@ int main(int argc, char* argv[]) {
                            & tbb::make_filter<bakuage::AlignedPodVector<float> *,BufferPtr>(tbb::filter::parallel, filter2_func)
                            & tbb::make_filter<BufferPtr, void>(tbb::filter::serial, filter3_func)
                            );
-    std::fflush(stdout);
+    if (std::fflush(stdout) != 0) {
+        throw std::runtime_error("failed to flush stdout");
+    }
 
     PrintMemoryUsage();
 
