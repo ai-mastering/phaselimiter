@@ -10,17 +10,20 @@ jobs:
     runs-on: windows-2022
     defaults:
       run:
-        shell: bash -el {0}
+        shell: bash
     steps:
       - uses: actions/checkout@v4
         with:
           submodules: recursive
-      - uses: conda-incubator/setup-miniconda@v3
+      - uses: conda-incubator/setup-miniconda@v4.1.0
         with:
           activate-environment: phaselimiter-build
           environment-file: environment/windows.yml
           miniforge-version: latest
-          auto-activate-base: false
+          auto-activate: false
+          # Only Bash is used below; avoid `conda init --all` and profile edits.
+          run-init: false
+          remove-profiles: false
       - name: Cache legacy SDK downloads
         uses: actions/cache@v4
         with:
@@ -28,10 +31,14 @@ jobs:
           key: windows-sdk-downloads-${{ hashFiles('environment/dependencies.json') }}
       - name: Fetch pinned legacy SDKs
         run: |
+          source "$(cygpath -u "$CONDA")/etc/profile.d/conda.sh"
+          conda activate phaselimiter-build
           python script/fetch_build_dependencies.py --platform windows \
             --prefix build/dependencies --cache-dir build/downloads
       - name: Configure and build
         run: |
+          source "$(cygpath -u "$CONDA")/etc/profile.d/conda.sh"
+          conda activate phaselimiter-build
           sdk_prefix="$(cygpath -m "$PWD/build/dependencies/windows")"
           cmake -S . -B build/windows -A x64 -DBUILD_TESTING=ON -DSANDYBRIDGE_SUPPORT=ON \
             "-DCMAKE_PREFIX_PATH=$sdk_prefix;$sdk_prefix/Library" \
@@ -41,6 +48,8 @@ jobs:
           cmake --build build/windows --config Release --parallel 2
       - name: CTest, CLI smoke and integration
         run: |
+          source "$(cygpath -u "$CONDA")/etc/profile.d/conda.sh"
+          conda activate phaselimiter-build
           mkdir -p build/tools/ffmpeg
           python -c 'import imageio_ffmpeg, shutil; shutil.copy2(imageio_ffmpeg.get_ffmpeg_exe(), "build/tools/ffmpeg/ffmpeg.exe")'
           export PATH="$PWD/build/tools/ffmpeg:$PWD/build/dependencies/windows/Library/bin:$PWD/prebuilt/win64/libsndfile-1.2.2-win64/bin:$PATH"
@@ -58,6 +67,8 @@ jobs:
             --output-dir build/results/windows --sound-quality-cache build/data/sound_quality2_cache
       - name: Stage and archive (including resolved DLL dependencies)
         run: |
+          source "$(cygpath -u "$CONDA")/etc/profile.d/conda.sh"
+          conda activate phaselimiter-build
           python script/stage_release.py --build-dir build/windows --destination build/stage/windows \
             --sound-quality-cache build/data/sound_quality2_cache
           python script/package_release.py --stage-dir build/stage/windows --output build/artifacts/release.zip
