@@ -1,4 +1,5 @@
 #include <algorithm>
+#include <cmath>
 #include <stdexcept>
 #include <vector>
 
@@ -73,6 +74,7 @@ void CheckTasks(int length, bool cache, int workers) {
     for (generation = 0; generation < 3; ++generation) {
         SCOPED_TRACE(generation);
         const auto expected = tasks.process(hook, input, output, true);
+        ASSERT_TRUE(std::isfinite(expected.eval));
         std::vector<Float> expected_gradient[2];
         for (int ch = 0; ch < 2; ++ch) {
             expected_gradient[ch].assign(gradient[ch].data(), gradient[ch].data() + length);

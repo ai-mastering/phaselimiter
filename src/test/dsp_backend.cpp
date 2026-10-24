@@ -144,6 +144,17 @@ TEST(DspBackend, Complex2DUnnormalizedRoundTrip) {
     for (int i = 0; i < input.size(); ++i) EXPECT_NEAR(input[i], output[i] / (width * height), 2e-6);
 }
 
+TEST(DspBackend, SimdSqrtZeroAndSquares) {
+    alignas(32) const float input[8] = {0, 1, 4, 9, 0, 16, 25, 36};
+    alignas(32) float output[8];
+    const simdpp::float32x8 value = simdpp::load(input);
+    simdpp::store(output, simdpp::sqrt(value));
+    for (int i = 0; i < 8; ++i) {
+        SCOPED_TRACE(i);
+        EXPECT_FLOAT_EQ(std::sqrt(input[i]), output[i]);
+    }
+}
+
 TEST(DspBackend, ProxSpecialValues) {
     using Simd = simdpp::float32x8;
     alignas(64) float input[8] = {std::numeric_limits<float>::quiet_NaN(), INFINITY, -INFINITY, -2, 2, -.5, .5, 0};
