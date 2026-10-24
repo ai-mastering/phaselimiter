@@ -78,6 +78,8 @@ jobs:
             build/stage/windows/phaselimiter/bin/snd_file_info.exe --input=test_data/test2.wav
           env -u CONDA_PREFIX -u CONDA_ROOT PATH="/c/Windows/System32:/c/Windows" \
             build/stage/windows/phaselimiter/bin/phase_limiter.exe --version
+          python script/test_windows_utf8.py --stage-dir build/stage/windows/phaselimiter \
+            --ffmpeg build/tools/ffmpeg/ffmpeg.exe
           test -z "$(git status --porcelain)"
           git submodule foreach --quiet --recursive 'test -z "$(git status --porcelain)"'
       - uses: actions/upload-artifact@v4

@@ -1,22 +1,22 @@
 #include "bakuage/utils.h"
 
 #include <locale>
-#ifdef _MSC_VER
+#ifdef _WIN32
 #include <codecvt>
-#include <Windows.h>
 #endif
 #include <boost/iostreams/device/mapped_file.hpp>
 
 namespace bakuage {
 
-#ifdef _MSC_VER
+#ifdef _WIN32
+// Windows paths use UTF-16, including surrogate pairs for non-BMP characters.
 std::string WStringToString(const std::wstring &w) {
-    std::wstring_convert<std::codecvt_utf8<wchar_t>,wchar_t> cv;
+    std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>,wchar_t> cv;
     return cv.to_bytes(w);
 }
 
 std::wstring StringToWString(const std::string &s) {
-    std::wstring_convert<std::codecvt_utf8<wchar_t>,wchar_t> cv;
+    std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>,wchar_t> cv;
     return cv.from_bytes(s);
 }
 

@@ -127,7 +127,7 @@ inline void SleepMs(int ms) {
 	std::this_thread::sleep_for(std::chrono::milliseconds(ms));
 }
 
-#ifdef _MSC_VER
+#ifdef _WIN32
 std::string WStringToString(const std::wstring &w);
 std::wstring StringToWString(const std::string &s);
 //std::string UTF8toSjis(std::string srcUTF8);

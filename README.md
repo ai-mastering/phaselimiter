@@ -154,6 +154,21 @@ Python 3.11.8+ with tar extraction filters. Linux extraction uses `dpkg-deb`.
 An x86-64 toolchain is required. It writes only to the requested prefix and
 cache. Normal CMake configure/build does not download or modify SDKs.
 
+Windows CLI runtime support requires Windows 10 version 1903 or later, or
+Windows 11. Each CLI embeds an `activeCodePage=UTF-8` process manifest;
+users do not need to enable the system-wide UTF-8 locale option. Internal narrow
+path strings are UTF-8, including executable, input, output, cache, and temporary
+paths. Convert explicitly at library boundaries that require another encoding.
+Japanese path support via this manifest is not guaranteed on older Windows.
+See [Microsoft's UTF-8 code page documentation](https://learn.microsoft.com/en-us/windows/apps/design/globalizing/use-utf8-code-page).
+
+`script/test_windows_utf8.py --stage-dir build/stage/windows/phaselimiter
+--ffmpeg build/tools/ffmpeg/ffmpeg.exe` checks the embedded manifests and runs
+WAV/MP3/AAC mastering with Japanese, spaces, and emoji in distribution, FFmpeg,
+input, output, cache, and temporary paths. Run on native Windows with the
+system-wide UTF-8 option disabled, including Windows 10 1903 for minimum-version
+acceptance. Wine alone does not establish native Windows compatibility.
+
 On Windows, use a VS 2022 x64 toolchain and an activated environment created
 from `environment/windows.yml`. Then fetch the Windows SDKs into
 `build/dependencies` with the same script's `--platform windows` option. Pass

@@ -233,3 +233,13 @@ if(PHASELIMITER_BUILD_BENCHMARKS)
   target_link_libraries(bench PRIVATE phaselimiter_cli benchmark::benchmark)
   phaselimiter_enable_warnings(bench)
 endif()
+
+# Apply to every executable defined here, including independent CLI tools.
+include(WindowsUtf8)
+get_property(phaselimiter_directory_targets DIRECTORY PROPERTY BUILDSYSTEM_TARGETS)
+foreach(target IN LISTS phaselimiter_directory_targets)
+  get_target_property(target_type ${target} TYPE)
+  if(target_type STREQUAL "EXECUTABLE")
+    phaselimiter_enable_windows_utf8(${target})
+  endif()
+endforeach()

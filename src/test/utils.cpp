@@ -72,3 +72,13 @@ TEST(Utils, IntegrateAlongX) {
     }
 }
 
+
+#ifdef _WIN32
+TEST(Utils, Utf8PathsRoundTripSurrogatePairs) {
+    const std::string utf8 = u8"日本語 空白 🎵";
+    const std::wstring utf16 = L"日本語 空白 \U0001F3B5";
+    EXPECT_EQ(utf16, bakuage::StringToWString(utf8));
+    EXPECT_EQ(utf8, bakuage::WStringToString(utf16));
+    EXPECT_EQ(utf8, bakuage::NormalizeToString(utf16));
+}
+#endif
