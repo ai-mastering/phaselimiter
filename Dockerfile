@@ -1,4 +1,4 @@
-# Debian 12 provides GCC 12 / Boost 1.74. Legacy DSP SDKs are checksum-pinned.
+# Debian 12 provides GCC 12 / Boost 1.74. DSP SDKs are checksum-pinned.
 FROM debian:bookworm-slim AS build
 
 RUN apt-get update \
@@ -14,12 +14,13 @@ COPY environment/dependencies.json /opt/phaselimiter-bootstrap/environment/depen
 COPY script/fetch_build_dependencies.py /opt/phaselimiter-bootstrap/script/fetch_build_dependencies.py
 RUN python3 /opt/phaselimiter-bootstrap/script/fetch_build_dependencies.py \
         --platform linux --prefix /opt/phaselimiter --cache-dir /tmp/sdk-downloads \
-    && echo /opt/phaselimiter/legacy/usr/lib/x86_64-linux-gnu > /etc/ld.so.conf.d/phaselimiter.conf \
+    && echo /opt/phaselimiter/opt/intel/oneapi/tbb/2023.1/lib > /etc/ld.so.conf.d/phaselimiter.conf \
     && ldconfig \
     && rm -rf /tmp/sdk-downloads /opt/phaselimiter-bootstrap
 
 ENV LANG=C.UTF-8 LC_ALL=C.UTF-8 \
     CMAKE_PREFIX_PATH=/opt/phaselimiter/legacy/usr \
+    TBB_ROOT=/opt/phaselimiter/opt/intel/oneapi/tbb/2023.1 \
     IPPROOT=/opt/phaselimiter/opt/intel/oneapi/ipp/2021.9.0
 WORKDIR /workspace
 

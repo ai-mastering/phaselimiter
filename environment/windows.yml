@@ -17,5 +17,4 @@ dependencies:
   - pip
   - pip:
       - imageio-ffmpeg==0.6.0
-# IPP and legacy TBB come from the checksum-pinned SDK manifest, not a
-# solver-selected oneTBB or the discontinued Intel conda channel.
+# IPP and oneTBB come from the checksum-pinned SDK manifest, not the conda solver.

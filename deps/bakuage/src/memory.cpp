@@ -5,7 +5,7 @@
 #endif
 
 #ifdef BAKUAGE_MEMORY_USE_TBB
-#include <tbb/scalable_allocator.h>
+#include <oneapi/tbb/scalable_allocator.h>
 #endif
 
 namespace bakuage {

@@ -110,10 +110,10 @@ preserves existing output files.
 ### Reproducible build environment
 
 The Dockerfile's `build` target is shared by local development and Linux CI.
-It uses Debian 12's GCC 12 / Boost 1.74 toolchain. The SDKs that must retain
-older APIs are pinned by URL and SHA-256 in `environment/dependencies.json`:
-Linux TBB 2020.3, Armadillo 10.1.2, and IPP 2021.9. Windows uses IPP 2019.2
-and TBB 2020.2, plus the conda environment in `environment/windows.yml`.
+It uses Debian 12's GCC 12 / Boost 1.74 toolchain. The SDKs are pinned by URL
+and SHA-256 in `environment/dependencies.json`:
+Linux oneTBB 2023.1, Armadillo 10.1.2, and IPP 2021.9. Windows uses IPP 2019.2
+and oneTBB 2023.1, plus the conda environment in `environment/windows.yml`.
 OS package security updates are allowed; this is not a bit-for-bit OS snapshot.
 
 For an x86-64 Linux build (also usable with Docker's x86-64 emulation):
@@ -142,8 +142,12 @@ python3 script/fetch_build_dependencies.py --platform linux \
   --prefix build/dependencies --cache-dir build/downloads
 cmake --preset release \
   -DCMAKE_PREFIX_PATH="$PWD/build/dependencies/legacy/usr" \
+  -DTBB_ROOT="$PWD/build/dependencies/opt/intel/oneapi/tbb/2023.1" \
   -DIPPROOT="$PWD/build/dependencies/opt/intel/oneapi/ipp/2021.9.0"
 ```
+
+When upgrading from legacy TBB, use a fresh build directory to avoid stale
+headers or library paths in the CMake cache.
 
 The scripts require Python 3.9+; Windows SDK extraction additionally needs
 Python 3.11.8+ with tar extraction filters. Linux extraction uses `dpkg-deb`.
@@ -154,7 +158,8 @@ On Windows, use a VS 2022 x64 toolchain and an activated environment created
 from `environment/windows.yml`. Then fetch the Windows SDKs into
 `build/dependencies` with the same script's `--platform windows` option. Pass
 both `build/dependencies/windows` and its `Library` subdirectory through
-`CMAKE_PREFIX_PATH`, and set `TBB_ROOT` to that `Library` directory. The workflow
+`CMAKE_PREFIX_PATH`, and set `TBB_ROOT` to
+`build/dependencies/windows/oneapi-tbb-2023.1.0`. The workflow
 in `.github/workflows/build-win.yml` contains the complete configure commands.
 The Intel conda channel index is not needed: the verified SDK archives are
 fetched directly. Other conda package versions are pinned in the environment
@@ -166,11 +171,11 @@ file; transitive dependencies are still resolved by conda.
 - An x86/x86-64 machine with AVX2/FMA, or AVX with `SANDYBRIDGE_SUPPORT=ON`.
   ARM/Apple Silicon native builds require DSP source changes. On Apple Silicon,
   use an x86-64 toolchain and x86-64 dependencies under Rosetta.
-- Intel IPP, legacy Intel TBB **2019/2020** (including tbbmalloc), Boost 1.65+
+- Intel IPP, oneTBB **2021.8+** (including tbbmalloc), Boost 1.65+
   (filesystem, serialization, system, math_tr1, iostreams), libsndfile, libpng,
   zlib, and Armadillo headers compatible with the pinned optim submodule.
-  oneTBB 2021+ removes APIs used by the current source. Updating CMake does not
-  make the DSP code compatible with newer TBB/Armadillo releases.
+  The SDK manifest pins oneTBB 2023.1. The optim fork retains its own parallel
+  loops; its oneTBB-compatible headers are generated in the build directory.
 - Google Benchmark, only when benchmarks are enabled.
 
 The pinned gflags, GoogleTest, and header dependencies are git submodules:
@@ -181,9 +186,9 @@ git submodule update --init --recursive
 
 CMake discovers installed libraries rather than assuming fixed library names or
 link directories. Use `CMAKE_PREFIX_PATH` for custom installation prefixes,
-`IPPROOT` for IPP, and `TBB_ROOT` (or `TBB_DIR` for its CMake package) for legacy
-TBB. `CONDA_PREFIX` and `CONDA_ROOT` are also recognized. On Windows, the bundled
-64-bit libsndfile import library is a fallback when no installed libsndfile is
+`IPPROOT` for IPP, and `TBB_ROOT` (or `TBB_DIR` for its CMake package) for
+oneTBB. `CONDA_PREFIX` and `CONDA_ROOT` are also recognized. On Windows, the
+bundled 64-bit libsndfile import library is a fallback when no installed libsndfile is
 found. Keep all dependencies on the same architecture and MSVC runtime ABI.
 
 ### Configure, build, and test

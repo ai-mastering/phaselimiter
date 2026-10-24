@@ -7,7 +7,7 @@
 #include <vector>
 #include <Eigen/Dense>
 #ifndef BAKUAGE_DISABLE_TBB
-#include <tbb/tbb.h>
+#include <oneapi/tbb.h>
 #endif
 #include "picojson.h"
 #include "bakuage/lof.h"

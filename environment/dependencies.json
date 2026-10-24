@@ -1,20 +1,20 @@
 {
   "linux": [
     {
-      "name": "libtbb-dev",
-      "version": "2020.3-1",
-      "url": "https://deb.debian.org/debian/pool/main/t/tbb/libtbb-dev_2020.3-1_amd64.deb",
-      "sha256": "8c3f7e2406807c93c197f19d18f5ea92d1a11a7f24c523ebfd5a0a6f3273440f",
+      "name": "intel-oneapi-tbb-devel-2023.1",
+      "version": "2023.1.0-151",
+      "url": "https://apt.repos.intel.com/oneapi/pool/main/intel-oneapi-tbb-devel-2023.1-2023.1.0-151_amd64.deb",
+      "sha256": "f56474678ecf588da4a3ac5342bcffdfd001dfad78bb432a5eb19765f7f6e512",
       "format": "deb",
-      "destination": "legacy"
+      "destination": "."
     },
     {
-      "name": "libtbb2",
-      "version": "2020.3-1",
-      "url": "https://deb.debian.org/debian/pool/main/t/tbb/libtbb2_2020.3-1_amd64.deb",
-      "sha256": "87ac7778820cbd7a2c7485f7fccd2ac4437b39cbb390e49b3aeec38a826f5af9",
+      "name": "intel-oneapi-tbb-2023.1",
+      "version": "2023.1.0-151",
+      "url": "https://apt.repos.intel.com/oneapi/pool/main/intel-oneapi-tbb-2023.1-2023.1.0-151_amd64.deb",
+      "sha256": "f6e4ae469436a8c5ee2250203268344164c9ff455a2207219c75c463aab99a8b",
       "format": "deb",
-      "destination": "legacy"
+      "destination": "."
     },
     {
       "name": "libarmadillo-dev",
@@ -59,19 +59,11 @@
       "destination": "windows"
     },
     {
-      "name": "tbb",
-      "version": "2020.2",
-      "url": "https://api.anaconda.org/download/conda-forge/tbb/2020.2/win-64/tbb-2020.2-h2d74725_4.tar.bz2",
-      "sha256": "29f489e8c46f464550b56659756187dc7fe4508ab34ef484e49eff37f81b4796",
-      "format": "tar.bz2",
-      "destination": "windows"
-    },
-    {
-      "name": "tbb-devel",
-      "version": "2020.2",
-      "url": "https://api.anaconda.org/download/conda-forge/tbb-devel/2020.2/win-64/tbb-devel-2020.2-h2d74725_4.tar.bz2",
-      "sha256": "c03ed44b6c08807a8f6decb96dd7d28e6c7b0ab5342afd6dcb85e448ab2dbe2d",
-      "format": "tar.bz2",
+      "name": "oneTBB",
+      "version": "2023.1.0",
+      "url": "https://github.com/uxlfoundation/oneTBB/releases/download/v2023.1.0/oneapi-tbb-2023.1.0-win.zip",
+      "sha256": "cf6ee0c600fcb5c3a9b65e3e6e4781669d06f1bb1e37970d145fcde08eed8da9",
+      "format": "zip",
       "destination": "windows"
     }
   ]

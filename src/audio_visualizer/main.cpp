@@ -1,3 +1,6 @@
+#include <oneapi/tbb/parallel_pipeline.h>
+#include <oneapi/tbb/global_control.h>
+#include <oneapi/tbb/info.h>
 #include <cstdio>
 #include <iostream>
 #include <stdexcept>
@@ -10,10 +13,9 @@
 #include "sndfile.h"
 #include "CImg.h"
 #include "ipp.h"
-#include "tbb/tbb.h"
-#include "tbb/pipeline.h"
-#include "tbb/scalable_allocator.h"
-#include "tbb/cache_aligned_allocator.h"
+#include <oneapi/tbb.h>
+#include <oneapi/tbb/scalable_allocator.h>
+#include <oneapi/tbb/cache_aligned_allocator.h>
 #include <boost/filesystem.hpp>
 #include "bakuage/sndfile_wrapper.h"
 #include "bakuage/dft.h"
@@ -124,6 +126,11 @@ int main(int argc, char* argv[]) {
     gflags::SetVersionString("1.0.0-oss");
     gflags::ParseCommandLineFlags(&argc, &argv, true);
 
+    if (FLAGS_worker_count < 0) {
+        std::cerr << "worker_count must be nonnegative" << std::endl;
+        return 1;
+    }
+
     if (FLAGS_output_format != "png" && FLAGS_output_format != "ppm") {
         std::cerr << "output_format must be png or ppm" << std::endl;
         return 1;
@@ -143,10 +150,9 @@ int main(int argc, char* argv[]) {
     std::cerr << "Ipp initialized " << lib->Name << " " << lib->Version << std::endl;
     PrintMemoryUsage();
 
-    // TBBの初期化とか (ここで初期化しておくと、毎回初期化しなくても良いらしい)
-    // https://www.xlsoft.com/jp/products/intel/perflib/tbb/41/tbb_userguide_lnx/reference/task_scheduler/task_scheduler_init_cls.htm
-    tbb::task_scheduler_init tbb_init(FLAGS_worker_count ? FLAGS_worker_count : tbb::task_scheduler_init::default_num_threads());
-    std::cerr << "TBB default_num_threads:" << tbb::task_scheduler_init::default_num_threads() << std::endl;
+    tbb::global_control tbb_limit(tbb::global_control::max_allowed_parallelism,
+            FLAGS_worker_count ? FLAGS_worker_count : tbb::info::default_concurrency());
+    std::cerr << "TBB default_num_threads:" << tbb::info::default_concurrency() << std::endl;
     PrintMemoryUsage();
 
     bakuage::SndfileWrapper infile;
@@ -277,9 +283,9 @@ int main(int argc, char* argv[]) {
         }
     };
     tbb::parallel_pipeline(256,
-                           tbb::make_filter<void, bakuage::AlignedPodVector<float> *>(tbb::filter::serial, filter1_func)
-                           & tbb::make_filter<bakuage::AlignedPodVector<float> *,BufferPtr>(tbb::filter::parallel, filter2_func)
-                           & tbb::make_filter<BufferPtr, void>(tbb::filter::serial, filter3_func)
+                           tbb::make_filter<void, bakuage::AlignedPodVector<float> *>(tbb::filter_mode::serial_in_order, filter1_func)
+                           & tbb::make_filter<bakuage::AlignedPodVector<float> *,BufferPtr>(tbb::filter_mode::parallel, filter2_func)
+                           & tbb::make_filter<BufferPtr, void>(tbb::filter_mode::serial_in_order, filter3_func)
                            );
     if (std::fflush(stdout) != 0) {
         throw std::runtime_error("failed to flush stdout");

@@ -3,7 +3,7 @@
 #include <cmath>
 #include <complex>
 #include <vector>
-#include "tbb/tbb.h"
+#include <oneapi/tbb.h>
 #include "bakuage/memory.h"
 #include "bakuage/utils.h"
 #include "bakuage/vector_math.h"

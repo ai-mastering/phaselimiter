@@ -1,3 +1,5 @@
+#include <oneapi/tbb/global_control.h>
+#include <oneapi/tbb/info.h>
 #define BOOST_LIB_DIAGNOSTIC
 
 #include <cmath>
@@ -862,10 +864,9 @@ int main(int argc, char* argv[]) {
         std::cerr << "Ipp initialized " << lib->Name << " " << lib->Version << std::endl;
         PrintMemoryUsage();
 
-        // TBBの初期化とか (ここで初期化しておくと、毎回初期化しなくても良いらしい)
-        // https://www.xlsoft.com/jp/products/intel/perflib/tbb/41/tbb_userguide_lnx/reference/task_scheduler/task_scheduler_init_cls.htm
-        tbb::task_scheduler_init tbb_init(FLAGS_worker_count ? FLAGS_worker_count : tbb::task_scheduler_init::default_num_threads());
-        std::cerr << "TBB default_num_threads:" << tbb::task_scheduler_init::default_num_threads() << std::endl;
+        tbb::global_control tbb_limit(tbb::global_control::max_allowed_parallelism,
+            FLAGS_worker_count ? FLAGS_worker_count : tbb::info::default_concurrency());
+        std::cerr << "TBB default_num_threads:" << tbb::info::default_concurrency() << std::endl;
         PrintMemoryUsage();
 
         phase_limiter::GradCoreSettings::GetInstance().set_erb_eval_func_weighting(FLAGS_erb_eval_func_weighting);

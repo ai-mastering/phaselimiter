@@ -7,6 +7,11 @@ endif()
 file(REMOVE_RECURSE "${OPTIM_OUTPUT_DIR}")
 file(MAKE_DIRECTORY "${OPTIM_OUTPUT_DIR}")
 file(COPY "${OPTIM_SOURCE_DIR}/include/" DESTINATION "${OPTIM_OUTPUT_DIR}")
+# Keep the pinned fork intact; its parallel_for calls work with oneTBB.
+# Use the canonical header to avoid accidentally mixing legacy TBB headers.
+file(READ "${OPTIM_OUTPUT_DIR}/optim.hpp" optim_header)
+string(REPLACE "<tbb/tbb.h>" "<oneapi/tbb.h>" optim_header "${optim_header}")
+file(WRITE "${OPTIM_OUTPUT_DIR}/optim.hpp" "${optim_header}")
 foreach(directory IN ITEMS constrained line_search unconstrained zeros)
   file(GLOB headers "${OPTIM_SOURCE_DIR}/include/${directory}/*.hpp")
   foreach(header IN LISTS headers)

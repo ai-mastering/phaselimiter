@@ -17,10 +17,9 @@
 #include <stdexcept>
 #include <map>
 #include <chrono>
-#include "tbb/tbb.h"
-#include "tbb/pipeline.h"
-#include "tbb/scalable_allocator.h"
-#include "tbb/cache_aligned_allocator.h"
+#include <oneapi/tbb.h>
+#include <oneapi/tbb/scalable_allocator.h>
+#include <oneapi/tbb/cache_aligned_allocator.h>
 #include "bakuage/memory.h"
 #include "bakuage/utils.h"
 #include "bakuage/fir_design.h"
@@ -274,7 +273,7 @@ namespace phase_limiter {
                 if (task.bg == task.ed)
                     return;
                 TaskType *t = task_allocator_.allocate(1);
-                task_allocator_.construct(t, task);
+                std::allocator_traits<decltype(task_allocator_)>::construct(task_allocator_, t, task);
                 tasks.push_back(t);
             }
             
@@ -404,7 +403,7 @@ namespace phase_limiter {
             void clear() {
                 for (size_t j = 0; j < tasks.size(); j++) {
                     tasks[j]->clearCache();
-                    task_allocator_.destroy(tasks[j]);
+                    std::allocator_traits<decltype(task_allocator_)>::destroy(task_allocator_, tasks[j]);
                     task_allocator_.deallocate(tasks[j], 1);
                 }
                 tasks.clear();

@@ -17,7 +17,7 @@
 #include <mutex>
 #include "gflags/gflags.h"
 #include "picojson.h"
-#include "tbb/tbb.h"
+#include <oneapi/tbb.h>
 
 #include "audio_analyzer/reverb.h"
 #include "audio_analyzer/peak.h"

@@ -1,3 +1,5 @@
+#include <oneapi/tbb/global_control.h>
+#include <oneapi/tbb/info.h>
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
@@ -14,7 +16,7 @@ struct SearchResult {
 };
 
 SearchResult Search(int workers, std::uint64_t seed, bool bounded = false) {
-    tbb::task_scheduler_init scheduler(workers);
+    tbb::global_control tbb_limit(tbb::global_control::max_allowed_parallelism, workers);
     SearchResult result;
     std::mutex mutex;
     arma::vec x(4, arma::fill::zeros);

@@ -15,7 +15,7 @@
 #include <mutex>
 #include <unordered_map>
 #include <vector>
-#include <tbb/scalable_allocator.h>
+#include <oneapi/tbb/scalable_allocator.h>
 #include "bakuage/dft.h"
 #include "bakuage/memory.h"
 #include "bakuage/utils.h"

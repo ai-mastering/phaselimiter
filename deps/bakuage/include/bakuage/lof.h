@@ -5,7 +5,7 @@
 #include <unordered_map>
 #include <vector>
 #ifndef BAKUAGE_DISABLE_TBB
-#include <tbb/tbb.h>
+#include <oneapi/tbb.h>
 #endif
 #include <boost/serialization/vector.hpp>
 #include "hnswlib/hnswlib.h"

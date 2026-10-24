@@ -24,12 +24,12 @@ jobs:
           # Only Bash is used below; avoid `conda init --all` and profile edits.
           run-init: false
           remove-profiles: false
-      - name: Cache legacy SDK downloads
+      - name: Cache SDK downloads
         uses: actions/cache@v4
         with:
           path: build/downloads
           key: windows-sdk-downloads-${{ hashFiles('environment/dependencies.json') }}
-      - name: Fetch pinned legacy SDKs
+      - name: Fetch pinned SDKs
         run: |
           source "$(cygpath -u "$CONDA")/etc/profile.d/conda.sh"
           conda activate phaselimiter-build
@@ -43,8 +43,8 @@ jobs:
           cmake -S . -B build/windows -A x64 -DBUILD_TESTING=ON -DSANDYBRIDGE_SUPPORT=ON \
             "-DCMAKE_PREFIX_PATH=$sdk_prefix;$sdk_prefix/Library" \
             "-DIPPROOT=$sdk_prefix" \
-            "-DTBB_ROOT=$sdk_prefix/Library" \
-            "-DPHASELIMITER_RUNTIME_DIRS=$sdk_prefix/Library/bin"
+            "-DTBB_ROOT=$sdk_prefix/oneapi-tbb-2023.1.0" \
+            "-DPHASELIMITER_RUNTIME_DIRS=$sdk_prefix/oneapi-tbb-2023.1.0/redist/intel64/vc14;$sdk_prefix/Library/bin"
           cmake --build build/windows --config Release --parallel 2
       - name: CTest, CLI smoke and integration
         run: |
@@ -52,7 +52,7 @@ jobs:
           conda activate phaselimiter-build
           mkdir -p build/tools/ffmpeg
           python -c 'import imageio_ffmpeg, shutil; shutil.copy2(imageio_ffmpeg.get_ffmpeg_exe(), "build/tools/ffmpeg/ffmpeg.exe")'
-          export PATH="$PWD/build/tools/ffmpeg:$PWD/build/dependencies/windows/Library/bin:$PWD/prebuilt/win64/libsndfile-1.2.2-win64/bin:$PATH"
+          export PATH="$PWD/build/dependencies/windows/oneapi-tbb-2023.1.0/redist/intel64/vc14:$PWD/build/tools/ffmpeg:$PWD/build/dependencies/windows/Library/bin:$PWD/prebuilt/win64/libsndfile-1.2.2-win64/bin:$PATH"
           # Exercise the encoder required by phase_limiter before the costly checks.
           ffmpeg -v error -i test_data/test2.wav -t 0.1 -acodec libmp3lame -ab 320k -f mp3 -y build/tools/ffmpeg/smoke.mp3
           ctest --test-dir build/windows -C Release --output-on-failure --no-tests=error --output-junit results.xml

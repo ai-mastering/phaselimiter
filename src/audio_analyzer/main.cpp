@@ -1,3 +1,5 @@
+#include <oneapi/tbb/global_control.h>
+#include <oneapi/tbb/info.h>
 #include <cstdio>
 #include <cstdlib>
 #include <iostream>
@@ -74,13 +76,17 @@ int main(int argc, char* argv[]) {
 		gflags::SetVersionString("1.0.0-oss");
 		gflags::ParseCommandLineFlags(&argc, &argv, true);
 
+        if (FLAGS_worker_count < 0)
+            throw std::invalid_argument("worker_count must be nonnegative");
+
 		ippInit();
 		const IppLibraryVersion *lib = ippGetLibVersion();
 		std::cerr << "Ipp initialized " << lib->Name << " " << lib->Version << std::endl;
 		PrintMemoryUsage();
 
-		tbb::task_scheduler_init tbb_init(FLAGS_worker_count ? FLAGS_worker_count : tbb::task_scheduler_init::default_num_threads());
-		std::cerr << "TBB default_num_threads:" << tbb::task_scheduler_init::default_num_threads() << std::endl;
+		tbb::global_control tbb_limit(tbb::global_control::max_allowed_parallelism,
+            FLAGS_worker_count ? FLAGS_worker_count : tbb::info::default_concurrency());
+		std::cerr << "TBB default_num_threads:" << tbb::info::default_concurrency() << std::endl;
 
 
 		if (FLAGS_mode == "default") {

@@ -5,7 +5,7 @@
 #include <cmath>
 #include <vector>
 #include <random>
-#include <tbb/parallel_for.h>
+#include <oneapi/tbb/parallel_for.h>
 
 #include "bakuage/memory.h"
 #include "bakuage/dft.h"

@@ -18,7 +18,7 @@ find_package(PNG REQUIRED)
 find_package(JPEG REQUIRED)
 find_package(ZLIB REQUIRED)
 find_package(IPP REQUIRED)
-find_package(LegacyTBB REQUIRED)
+find_package(TBB 2021.8 CONFIG REQUIRED COMPONENTS tbb tbbmalloc)
 find_package(SndFile REQUIRED)
 # optim uses Armadillo's header-only mode (ARMA_DONT_USE_WRAPPER).
 find_path(ARMADILLO_INCLUDE_DIR NAMES armadillo REQUIRED)
@@ -26,7 +26,7 @@ find_path(ARMADILLO_INCLUDE_DIR NAMES armadillo REQUIRED)
 add_library(phaselimiter_dependencies INTERFACE)
 target_link_libraries(phaselimiter_dependencies INTERFACE
   Boost::filesystem Boost::serialization Boost::system Boost::math_tr1 Boost::iostreams
-  IPP::IPP LegacyTBB::LegacyTBB SndFile::SndFile PNG::PNG JPEG::JPEG ZLIB::ZLIB Threads::Threads
+  IPP::IPP TBB::tbb TBB::tbbmalloc SndFile::SndFile PNG::PNG JPEG::JPEG ZLIB::ZLIB Threads::Threads
   ${CMAKE_DL_LIBS})
 if(UNIX)
   target_link_libraries(phaselimiter_dependencies INTERFACE m)

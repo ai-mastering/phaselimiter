@@ -1,7 +1,7 @@
 #include "gtest/gtest.h"
 
 #include <vector>
-#include <tbb/task_arena.h>
+#include <oneapi/tbb/task_arena.h>
 #include "audio_analyzer/reverb.h"
 
 namespace {

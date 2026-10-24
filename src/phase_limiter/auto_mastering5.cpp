@@ -1,3 +1,5 @@
+#include <oneapi/tbb/global_control.h>
+#include <oneapi/tbb/info.h>
 #include "phase_limiter/auto_mastering.h"
 #include "phase_limiter/fir_processing.h"
 
@@ -11,7 +13,7 @@
 #include <mutex>
 #include "gflags/gflags.h"
 #include "picojson.h"
-#include "tbb/tbb.h"
+#include <oneapi/tbb.h>
 #include <optim.hpp>
 #include "phase_limiter/cmaes_optimizer.h"
 #include <boost/archive/binary_iarchive.hpp>
@@ -496,7 +498,7 @@ namespace phase_limiter {
                     std::vector<double>(upper_bounds.begin(), upper_bounds.end()),
                     FLAGS_mastering5_optimization_max_eval_count - 1,
                     FLAGS_mastering5_optimization_seed,
-                    FLAGS_worker_count ? FLAGS_worker_count : tbb::task_scheduler_init::default_num_threads());
+                    FLAGS_worker_count ? FLAGS_worker_count : tbb::info::default_concurrency());
                 result = arma::vec(solution.params);
                 result_eval = solution.value;
                 success = true;

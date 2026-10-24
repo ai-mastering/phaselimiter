@@ -1,6 +1,7 @@
 """Contracts for SDK integrity and release layout; no native compiler required."""
 import hashlib
 import importlib.util
+import json
 from pathlib import Path
 import sys
 import tarfile
@@ -26,6 +27,33 @@ packager = load('package_release')
 
 
 class ReleaseContracts(unittest.TestCase):
+    def test_fetch_extracts_onetbb_zip_layout(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / 'script').mkdir()
+            (root / 'environment').mkdir()
+            archive = root / 'onetbb.zip'
+            header = 'oneapi-tbb/include/oneapi/tbb.h'
+            library = 'oneapi-tbb/redist/intel64/vc14/tbb12.dll'
+            with zipfile.ZipFile(archive, 'w') as package:
+                package.writestr(header, '// SDK header')
+                package.writestr(library, b'SDK library')
+            asset = {
+                'name': 'oneTBB', 'version': 'test', 'url': archive.as_uri(),
+                'sha256': hashlib.sha256(archive.read_bytes()).hexdigest(),
+                'format': 'zip', 'destination': 'windows',
+            }
+            (root / 'environment/dependencies.json').write_text(
+                json.dumps({'windows': [asset]}))
+            arguments = ['fetch', '--platform', 'windows', '--prefix', str(root / 'sdk'),
+                         '--cache-dir', str(root / 'cache')]
+            with mock.patch.object(fetcher, '__file__', str(root / 'script/fetch.py')):
+                with mock.patch.object(sys, 'argv', arguments):
+                    fetcher.main()
+            sdk = root / 'sdk/windows'
+            self.assertEqual((sdk / header).read_text(), '// SDK header')
+            self.assertEqual((sdk / library).read_bytes(), b'SDK library')
+
     def test_download_rejects_corrupted_cache(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

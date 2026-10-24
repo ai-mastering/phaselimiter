@@ -1,9 +1,11 @@
+#include <oneapi/tbb/global_control.h>
+#include <oneapi/tbb/info.h>
 
 #include <random>
 #include "gtest/gtest.h"
 #include "gflags/gflags.h"
 #include "boost/filesystem.hpp"
-#include <tbb/tbb.h>
+#include <oneapi/tbb.h>
 #include <boost/archive/binary_iarchive.hpp>
 #include <boost/archive/binary_oarchive.hpp>
 #include "bakuage/sound_quality2.h"
@@ -195,7 +197,8 @@ TEST(SoundQuality2Calculator, Validation) {
     other_cov_non_diag_stats.AddParent(&total_stats);
     
     // CircleCIでメモリ使いすぎで落ちるので並列数を制限する
-    tbb::task_scheduler_init tbb_init(FLAGS_sound_quality2_worker_count ? FLAGS_sound_quality2_worker_count : tbb::task_scheduler_init::default_num_threads());
+    tbb::global_control tbb_limit(tbb::global_control::max_allowed_parallelism,
+        FLAGS_sound_quality2_worker_count ? FLAGS_sound_quality2_worker_count : tbb::info::default_concurrency());
     for (int cv_i = 0; cv_i < cv_count; cv_i++) {
         // 全てのreference、全ての特徴量に対して、1dB変化させたときのsound_qualityを計算する
         // スペクトル平均、共分散(対角)、共分散(非対角)に分類して統計を取り

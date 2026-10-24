@@ -7,7 +7,7 @@
 #include <limits>
 #include <exception>
 #include <memory>
-#include <tbb/parallel_for.h>
+#include <oneapi/tbb/parallel_for.h>
 #include "CImg.h"
 #include "bakuage/utils.h"
 #include "bakuage/pan_detect_filter.h"

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Fetch the legacy SDKs pinned by environment/dependencies.json."""
+"""Fetch the SDKs pinned by environment/dependencies.json."""
 import argparse
 import hashlib
 import json
@@ -9,6 +9,7 @@ import subprocess
 import tarfile
 import tempfile
 import urllib.request
+import zipfile
 
 
 def fetch(asset, cache):
@@ -46,6 +47,9 @@ def main():
         destination.mkdir(parents=True, exist_ok=True)
         if asset['format'] == 'deb':
             subprocess.run(['dpkg-deb', '--extract', str(archive), str(destination)], check=True)
+        elif asset['format'] == 'zip':
+            with zipfile.ZipFile(archive) as package:
+                package.extractall(destination)
         else:
             with tarfile.open(archive) as package:
                 package.extractall(destination, filter='data')

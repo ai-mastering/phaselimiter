@@ -1,5 +1,5 @@
 #include <benchmark/benchmark.h>
-#include <tbb/tbb.h>
+#include <oneapi/tbb.h>
 #include "bakuage/dft.h"
 #include "bakuage/memory.h"
 #include "bakuage/vector_math.h"

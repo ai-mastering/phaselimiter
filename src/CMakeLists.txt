@@ -195,8 +195,6 @@ if(BUILD_TESTING)
   add_dependencies(phaselimiter_tests process_fixture)
   target_compile_definitions(phaselimiter_tests PRIVATE
     PROCESS_FIXTURE_PATH="$<TARGET_FILE:process_fixture>")
-  # Let leak checkers inspect the process after all legacy TBB workers exit.
-  target_compile_definitions(phaselimiter_tests PRIVATE TBB_PREVIEW_WAITING_FOR_WORKERS=1)
   target_link_libraries(phaselimiter_tests PRIVATE phaselimiter_cli gtest)
   phaselimiter_enable_warnings(phaselimiter_tests)
   # The validation suite needs a separately downloaded dataset. JsFilterTest
