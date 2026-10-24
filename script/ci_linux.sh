@@ -28,6 +28,9 @@ if [ "$configuration" = Release ]; then
   "$build_dir/bin/audio_analyzer" --mode=sound_quality2_preparation \
     --analysis_data_dir="$PWD/build/dataset/analysis_shortpath" \
     --sound_quality2_cache="$PWD/build/data/sound_quality2_cache"
+  python3 script/check_dsp_port.py --bin-dir "$build_dir/bin" \
+    --sound-quality-cache build/data/sound_quality2_cache \
+    --output-dir build/results/dsp-reference
   python3 script/ci_checks.py --mode integration --bin-dir "$build_dir/bin" \
     --output-dir build/results/integration --sound-quality-cache build/data/sound_quality2_cache
   python3 script/stage_release.py --build-dir "$build_dir" --destination build/stage/linux \

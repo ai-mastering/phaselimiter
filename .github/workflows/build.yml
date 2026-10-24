@@ -43,6 +43,12 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: matrix.configuration == 'Release'
         with:
+          name: linux-dsp-reference
+          path: build/results/dsp-reference
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        if: matrix.configuration == 'Release'
+        with:
           name: linux-release
           path: build/artifacts/release.tar.xz
           if-no-files-found: error
@@ -202,6 +208,10 @@ jobs:
         with:
           name: sound-quality-cache
           path: build/data
+      - uses: actions/download-artifact@v4
+        with:
+          name: linux-dsp-reference
+          path: build/data/dsp-reference
       - name: Test and load the Linux model cache
         run: |
           source "$CONDA/etc/profile.d/conda.sh"
@@ -215,6 +225,15 @@ jobs:
           python script/ci_checks.py --mode integration --bin-dir build/macos/bin \
             --sound-quality-cache build/data/sound_quality2_cache \
             --output-dir build/results/macos-dsp
+      - name: Compare native DSP results with Linux
+        run: |
+          source "$CONDA/etc/profile.d/conda.sh"
+          conda activate phaselimiter-build
+          export PATH="$PWD/build/tools/ffmpeg:$PATH"
+          python script/check_dsp_port.py --bin-dir build/macos/bin \
+            --sound-quality-cache build/data/sound_quality2_cache \
+            --reference build/data/dsp-reference \
+            --output-dir build/results/macos-dsp-comparison
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -223,3 +242,4 @@ jobs:
             build/macos/Testing
             build/macos/results.xml
             build/results/macos-dsp
+            build/results/macos-dsp-comparison
