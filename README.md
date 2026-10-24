@@ -184,6 +184,11 @@ The pinned gflags, GoogleTest, and header dependencies are git submodules:
 git submodule update --init --recursive
 ```
 
+HNSW is pinned to upstream hnswlib v0.9.0. Existing model caches retain the
+legacy 64-bit little-endian index layout used on x86-64 and ARM64; upgrading
+does not require rebuilding them. A frozen legacy index is covered by the
+`hnsw-compatibility` test.
+
 CMake discovers installed libraries rather than assuming fixed library names or
 link directories. Use `CMAKE_PREFIX_PATH` for custom installation prefixes,
 `IPPROOT` for IPP, and `TBB_ROOT` (or `TBB_DIR` for its CMake package) for

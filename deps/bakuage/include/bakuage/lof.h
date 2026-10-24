@@ -1,6 +1,7 @@
 #ifndef BAKUAGE_LOF_H
 #define BAKUAGE_LOF_H
 
+#include <cstddef>
 #include <memory>
 #include <unordered_map>
 #include <vector>
@@ -41,20 +42,20 @@ namespace bakuage {
         
         LofSpace(const DistFunc &dist_func): hnswlib::SpaceInterface<DistT>(), dist_func_(dist_func), points_(nullptr) {};
         
-        virtual ~LofSpace() {}
+        ~LofSpace() override {}
         
         DistType GetDistance(const LofPoint *point1, const LofPoint *point2) {
             // memo化をしてもメモリが増えるだけで速くならない
             return dist_func_(*point1 < 0 ? **ThreadLocalTemporaryPoint() : points_[*point1], *point2 < 0 ? **ThreadLocalTemporaryPoint() : points_[*point2]);
         }
         
-        virtual hnswlib::size_t get_data_size() {
+        std::size_t get_data_size() override {
             return sizeof(LofPoint);
         }
-        virtual hnswlib::DISTFUNC<DistType> get_dist_func() {
+        hnswlib::DISTFUNC<DistType> get_dist_func() override {
             return HnswDistFunc<LofSpace>;
         }
-        virtual void *get_dist_func_param() {
+        void *get_dist_func_param() override {
             return this;
         }
         

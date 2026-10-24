@@ -1,0 +1,14 @@
+hnsw_legacy_4f10ecb.bin is a frozen little-endian, 64-bit HNSW index.
+It was generated with contribu/hnswlib commit
+4f10ecb076721d4ec7d1d13ff51810042226fdc8, before switching to upstream.
+SHA-256: 8e86817535b076be7701d2275de98b86dc80dd10ef1ee5a62708da018b4ae150
+
+The corpus contains int32 IDs 0..79, a custom double Euclidean distance,
+64-bit labels 2^40 + 7*ID, capacity 96, M=8, ef_construction=200, seed=100.
+Tests compute exact neighbors independently and load this existing graph;
+they must not regenerate the fixture with the current hnswlib version.
+
+Reproduce with a checkout of the legacy commit:
+  c++ -std=c++11 -O2 -march=core-avx2 -I/path/to/legacy/hnswlib \
+    src/test/data/generate_hnsw_legacy.cpp -pthread -o /tmp/generate_hnsw_legacy
+  /tmp/generate_hnsw_legacy src/test/data/hnsw_legacy_4f10ecb.bin
