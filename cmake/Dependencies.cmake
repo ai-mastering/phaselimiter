@@ -69,6 +69,8 @@ function(phaselimiter_add_bundled_dependencies)
   add_subdirectory(deps/gflags EXCLUDE_FROM_ALL)
   set(BUILD_TESTING "${project_build_testing}")
   if(BUILD_TESTING)
+    # Suppress GoogleTest's legacy /MD-to-/MT flag rewrite; CMP0091 lets
+    # CMAKE_MSVC_RUNTIME_LIBRARY select the CRT for all bundled targets.
     set(gtest_force_shared_crt ON CACHE BOOL "Use the shared MSVC runtime" FORCE)
     set(BUILD_GMOCK OFF CACHE BOOL "Build Google Mock" FORCE)
     set(INSTALL_GTEST OFF CACHE BOOL "Install GoogleTest" FORCE)

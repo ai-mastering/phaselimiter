@@ -14,8 +14,10 @@ if(NOT DEFINED CMAKE_CXX_STANDARD)
 endif()
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
-# Keep the existing /MD and /MDd ABI on MSVC, including bundled libraries.
-set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL")
+# Default to /MD and /MDd on MSVC, but honor caller/toolchain CRT settings.
+if(NOT DEFINED CMAKE_MSVC_RUNTIME_LIBRARY)
+  set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL")
+endif()
 
 option(PHASELIMITER_SANITIZERS "Enable ASan/UBSan and libstdc++ assertions (GCC/Clang)" OFF)
 
