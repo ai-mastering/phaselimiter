@@ -34,7 +34,7 @@ def fetch(asset, cache):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--platform', choices=['linux', 'windows'], required=True)
+    parser.add_argument('--platform', choices=['linux', 'windows', 'macos-intel'], required=True)
     parser.add_argument('--prefix', type=Path, required=True)
     parser.add_argument('--cache-dir', type=Path, required=True)
     args = parser.parse_args()

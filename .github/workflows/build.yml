@@ -136,9 +136,20 @@ jobs:
           name: linux-${{ matrix.mode }}-results
           path: build/results
 
-  macos-arm64:
+  macos:
+    name: macos-${{ matrix.arch }}
     needs: build
-    runs-on: macos-15
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-15
+            arch: arm64
+            backend: Accelerate
+          - runner: macos-15-intel
+            arch: x86_64
+            backend: IPP
+    runs-on: ${{ matrix.runner }}
     defaults:
       run:
         shell: bash
@@ -146,8 +157,8 @@ jobs:
       - uses: actions/checkout@v4
         with:
           submodules: recursive
-      - name: Verify native Apple Silicon runner
-        run: test "$(uname -m)" = arm64
+      - name: Verify native runner architecture
+        run: test "$(uname -m)" = "${{ matrix.arch }}"
       - uses: conda-incubator/setup-miniconda@v4.1.0
         with:
           activate-environment: phaselimiter-build
@@ -156,19 +167,36 @@ jobs:
           auto-activate: false
           run-init: false
           remove-profiles: false
-      - name: Build with Apple Accelerate
+      - name: Cache Intel Mac IPP downloads
+        if: matrix.arch == 'x86_64'
+        uses: actions/cache@v4
+        with:
+          path: build/downloads
+          key: macos-intel-ipp-${{ hashFiles('environment/dependencies.json') }}
+      - name: Fetch pinned Intel Mac IPP
+        if: matrix.arch == 'x86_64'
         run: |
           source "$CONDA/etc/profile.d/conda.sh"
           conda activate phaselimiter-build
+          python script/fetch_build_dependencies.py --platform macos-intel \
+            --prefix build/dependencies --cache-dir build/downloads
+      - name: Build with ${{ matrix.backend }}
+        run: |
+          source "$CONDA/etc/profile.d/conda.sh"
+          conda activate phaselimiter-build
+          dsp_options=()
+          if [ "${{ matrix.arch }}" = x86_64 ]; then
+            dsp_options=("-DIPPROOT=$PWD/build/dependencies/macos-intel")
+          fi
           cmake -S . -B build/macos -G Ninja -DCMAKE_BUILD_TYPE=Release \
             -DCMAKE_C_COMPILER=/usr/bin/clang -DCMAKE_CXX_COMPILER=/usr/bin/clang++ \
-            -DCMAKE_OSX_ARCHITECTURES=arm64 -DCMAKE_OSX_DEPLOYMENT_TARGET=11.0 \
+            -DCMAKE_OSX_ARCHITECTURES=${{ matrix.arch }} -DCMAKE_OSX_DEPLOYMENT_TARGET=11.0 \
             -DBUILD_TESTING=ON -DPHASELIMITER_STATIC_BOOST=OFF \
             "-DCMAKE_PREFIX_PATH=$CONDA_PREFIX" \
             "-DOpenMP_CXX_FLAGS=-Xpreprocessor -fopenmp" \
             "-DOpenMP_CXX_INCLUDE_DIR=$CONDA_PREFIX/include" \
             -DOpenMP_CXX_LIB_NAMES=omp \
-            "-DOpenMP_omp_LIBRARY=$CONDA_PREFIX/lib/libomp.dylib"
+            "-DOpenMP_omp_LIBRARY=$CONDA_PREFIX/lib/libomp.dylib" "${dsp_options[@]}"
           cmake --build build/macos --parallel 2
       - uses: actions/download-artifact@v4
         with:
@@ -190,7 +218,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: macos-arm64-results
+          name: macos-${{ matrix.arch }}-results
           path: |
             build/macos/Testing
             build/macos/results.xml

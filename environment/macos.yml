@@ -18,4 +18,5 @@ dependencies:
   - pip:
       - imageio-ffmpeg==0.6.0
 # Use Xcode/Command Line Tools for AppleClang and the macOS SDK.
-# DSP functions come from the system Accelerate framework; IPP is not needed.
+# ARM64 uses the system Accelerate framework. Intel Mac IPP is fetched from
+# the checksum-pinned macos-intel manifest, independently of the conda solver.

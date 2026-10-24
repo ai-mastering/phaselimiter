@@ -66,5 +66,23 @@
       "format": "zip",
       "destination": "windows"
     }
+  ],
+  "macos-intel": [
+    {
+      "name": "ipp-include",
+      "version": "2021.9.0",
+      "url": "https://api.anaconda.org/download/intel/ipp-include/2021.9.0/osx-64/ipp-include-2021.9.0-intel_49456.tar.bz2",
+      "sha256": "6afc8ff9bcab4cb88b6bf83b83b6d6ee1d1a5040e97b43e97022a0140fe8f7f7",
+      "format": "tar.bz2",
+      "destination": "macos-intel"
+    },
+    {
+      "name": "ipp-static",
+      "version": "2021.9.0",
+      "url": "https://api.anaconda.org/download/intel/ipp-static/2021.9.0/osx-64/ipp-static-2021.9.0-intel_49456.tar.bz2",
+      "sha256": "6164e9af534ef9adb231cff5d4166bf182c670ff22541afefd71133192b8763b",
+      "format": "tar.bz2",
+      "destination": "macos-intel"
+    }
   ]
 }
