@@ -94,6 +94,7 @@ namespace bakuage {
             if (spec) ippsFree(spec);
             if (buffer) ippsFree(buffer);
             if (delay) ippsFree(delay);
+            if (delay2) ippsFree(delay2);
         }
         
         void Clock(const Float *bg, const Float *ed, Float *output) {

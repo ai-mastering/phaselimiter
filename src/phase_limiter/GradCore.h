@@ -9,7 +9,6 @@
 #include <cmath>
 #include <stdint.h>
 #include <cstring>
-#include <immintrin.h>
 #include <algorithm>
 #include <iostream>
 #include <mutex>

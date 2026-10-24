@@ -167,6 +167,7 @@ if(BUILD_TESTING)
     test/audio_boundaries.cpp
     test/clear_mixer_filter3.cpp
     test/clear_mixer_filter4.cpp
+    test/dsp_backend.cpp
     test/delay_filter2.cpp
     test/example.cpp
     test/fir_filter_bank.cpp

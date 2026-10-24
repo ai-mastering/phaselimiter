@@ -110,7 +110,9 @@ namespace phase_limiter {
     }
 #endif
     
-#if defined (__GNUC__)
+#if defined(__aarch64__) || defined(_M_ARM64)
+#define IACA_SSC_MARK(MARK_ID) ((void)0)
+#elif defined (__GNUC__)
 #define IACA_SSC_MARK( MARK_ID )                        \
 __asm__ __volatile__ (                                    \
 "\n\t  movl $"#MARK_ID", %%ebx"    \

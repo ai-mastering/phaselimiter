@@ -17,7 +17,16 @@ find_package(Threads REQUIRED)
 find_package(PNG REQUIRED)
 find_package(JPEG REQUIRED)
 find_package(ZLIB REQUIRED)
-find_package(IPP REQUIRED)
+# Apple Silicon uses the OS DSP library; x86 keeps the existing IPP backend.
+if(APPLE AND PHASELIMITER_TARGET_PROCESSOR MATCHES "^(arm64|aarch64)$")
+  set(PHASELIMITER_USE_ACCELERATE ON)
+  find_library(PHASELIMITER_ACCELERATE_FRAMEWORK Accelerate REQUIRED)
+  set(phaselimiter_dsp_library "${PHASELIMITER_ACCELERATE_FRAMEWORK}")
+else()
+  set(PHASELIMITER_USE_ACCELERATE OFF)
+  find_package(IPP REQUIRED)
+  set(phaselimiter_dsp_library IPP::IPP)
+endif()
 find_package(TBB 2021.8 CONFIG REQUIRED COMPONENTS tbb tbbmalloc)
 find_package(SndFile REQUIRED)
 # optim uses Armadillo's header-only mode (ARMA_DONT_USE_WRAPPER).
@@ -26,7 +35,7 @@ find_path(ARMADILLO_INCLUDE_DIR NAMES armadillo REQUIRED)
 add_library(phaselimiter_dependencies INTERFACE)
 target_link_libraries(phaselimiter_dependencies INTERFACE
   Boost::filesystem Boost::serialization Boost::system Boost::math_tr1 Boost::iostreams
-  IPP::IPP TBB::tbb TBB::tbbmalloc SndFile::SndFile PNG::PNG JPEG::JPEG ZLIB::ZLIB Threads::Threads
+  ${phaselimiter_dsp_library} TBB::tbb TBB::tbbmalloc SndFile::SndFile PNG::PNG JPEG::JPEG ZLIB::ZLIB Threads::Threads
   ${CMAKE_DL_LIBS})
 if(UNIX)
   target_link_libraries(phaselimiter_dependencies INTERFACE m)

@@ -7,8 +7,8 @@
 #include <unordered_map>
 
 // FFTWと互換性のあるFFTを、thread safeで、バックエンドに依存させずに使えるようにするためのもの
-// ライセンスとかを考えるとサーバーサイドの場合はFFTW or IPP、クライアントサイドはIPPなので、
-// IPPバックエンドで実装する
+// x86はIPP、macOS ARM64はAccelerateを使用する。
+// どちらも順変換・逆変換は正規化せず、Pack/Permの配置も共通にする
 // 本当にスピードが重要な場合は使わない
 
 namespace bakuage {
@@ -132,7 +132,9 @@ namespace bakuage {
         int work_size() const;
     private:
         const void *dft_ptr_;
+#ifndef BAKUAGE_USE_ACCELERATE
         const void *fft_ptr_;
+#endif
         FftMemoryBuffer work_;
     };
     
@@ -171,7 +173,9 @@ namespace bakuage {
         int work_size() const;
     private:
         const void *dft_ptr_;
+#ifndef BAKUAGE_USE_ACCELERATE
         const void *fft_ptr_;
+#endif
         FftMemoryBuffer work_;
     };
     

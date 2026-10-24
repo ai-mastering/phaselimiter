@@ -12,7 +12,6 @@
 #include <thread>
 #include <vector>
 #include <list>
-#include <immintrin.h>
 #include <random>
 #include <stdexcept>
 #include <map>
@@ -46,7 +45,14 @@ namespace phase_limiter {
         inline SimdType ProxOperator(const SimdType x) {
             const SimdType one = simdpp::splat<SimdType>(1.0f);
             const SimdType minusOne = simdpp::splat<SimdType>(-1.0f);
+#if defined(__aarch64__)
+            // x86 MIN selects its second operand for NaN. NEON MIN propagates
+            // NaN, so comparisons/selects preserve the existing clipping rule.
+            const SimdType upper = simdpp::blend(x, one, simdpp::cmp_lt(x, one));
+            return simdpp::blend(upper, minusOne, simdpp::cmp_gt(upper, minusOne));
+#else
             return simdpp::max(simdpp::min(x, one), minusOne); //NaNの関係で多分順番が大事
+#endif
         }
         
         inline int GetWorkerCount(int worker_count) {

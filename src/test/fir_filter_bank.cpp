@@ -323,6 +323,6 @@ TEST(FirFilterBank, Reconstruction) {
 }
 #endif
 
-INSTANTIATE_TEST_CASE_P(FirFilterBankTestInstance,
+INSTANTIATE_TEST_SUITE_P(FirFilterBankTestInstance,
                         FirFilterBankTest,
                         ::testing::ValuesIn(test_params));

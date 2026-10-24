@@ -171,7 +171,8 @@ TEST(AudioBoundaries, FftBufferValidationAndCopies) {
     EXPECT_EQ(42, static_cast<unsigned char *>(copy.data())[0]);
     copy = buffer;
     EXPECT_EQ(7, static_cast<unsigned char *>(copy.data())[0]);
-    copy = copy;
+    const auto *same = &copy;
+    copy = *same; // Exercise self-assignment without Clang's syntactic warning.
     EXPECT_EQ(7, static_cast<unsigned char *>(copy.data())[0]);
     copy = std::move(buffer);
     EXPECT_EQ(7, static_cast<unsigned char *>(copy.data())[0]);

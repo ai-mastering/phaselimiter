@@ -135,3 +135,63 @@ jobs:
         with:
           name: linux-${{ matrix.mode }}-results
           path: build/results
+
+  macos-arm64:
+    needs: build
+    runs-on: macos-15
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Verify native Apple Silicon runner
+        run: test "$(uname -m)" = arm64
+      - uses: conda-incubator/setup-miniconda@v4.1.0
+        with:
+          activate-environment: phaselimiter-build
+          environment-file: environment/macos.yml
+          miniforge-version: latest
+          auto-activate: false
+          run-init: false
+          remove-profiles: false
+      - name: Build with Apple Accelerate
+        run: |
+          source "$CONDA/etc/profile.d/conda.sh"
+          conda activate phaselimiter-build
+          cmake -S . -B build/macos -G Ninja -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_C_COMPILER=/usr/bin/clang -DCMAKE_CXX_COMPILER=/usr/bin/clang++ \
+            -DCMAKE_OSX_ARCHITECTURES=arm64 -DCMAKE_OSX_DEPLOYMENT_TARGET=11.0 \
+            -DBUILD_TESTING=ON -DPHASELIMITER_STATIC_BOOST=OFF \
+            "-DCMAKE_PREFIX_PATH=$CONDA_PREFIX" \
+            "-DOpenMP_CXX_FLAGS=-Xpreprocessor -fopenmp" \
+            "-DOpenMP_CXX_INCLUDE_DIR=$CONDA_PREFIX/include" \
+            -DOpenMP_CXX_LIB_NAMES=omp \
+            "-DOpenMP_omp_LIBRARY=$CONDA_PREFIX/lib/libomp.dylib"
+          cmake --build build/macos --parallel 2
+      - uses: actions/download-artifact@v4
+        with:
+          name: sound-quality-cache
+          path: build/data
+      - name: Test and load the Linux model cache
+        run: |
+          source "$CONDA/etc/profile.d/conda.sh"
+          conda activate phaselimiter-build
+          mkdir -p build/tools/ffmpeg
+          python -c 'import imageio_ffmpeg, shutil; shutil.copy2(imageio_ffmpeg.get_ffmpeg_exe(), "build/tools/ffmpeg/ffmpeg")'
+          chmod +x build/tools/ffmpeg/ffmpeg
+          export PATH="$PWD/build/tools/ffmpeg:$PATH"
+          ffmpeg -v error -i test_data/test2.wav -t 0.1 -acodec libmp3lame -ab 320k -f mp3 -y build/tools/ffmpeg/smoke.mp3
+          ctest --test-dir build/macos --output-on-failure --no-tests=error --output-junit results.xml
+          python script/ci_checks.py --mode integration --bin-dir build/macos/bin \
+            --sound-quality-cache build/data/sound_quality2_cache \
+            --output-dir build/results/macos-dsp
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: macos-arm64-results
+          path: |
+            build/macos/Testing
+            build/macos/results.xml
+            build/results/macos-dsp

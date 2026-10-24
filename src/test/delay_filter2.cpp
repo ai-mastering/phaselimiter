@@ -94,6 +94,6 @@ TEST_P(DelayFilter2Test, Outofplace) {
     }
 }
 
-INSTANTIATE_TEST_CASE_P(DelayFilter2TestInstance,
+INSTANTIATE_TEST_SUITE_P(DelayFilter2TestInstance,
                         DelayFilter2Test,
                         ::testing::ValuesIn(test_params));

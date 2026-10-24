@@ -329,10 +329,10 @@ TEST_P(ClearMixerFilter4Test, EqualToClearMixer3) {
     }
 }
 
-INSTANTIATE_TEST_CASE_P(ClearMixerFilter4TestInstance,
+INSTANTIATE_TEST_SUITE_P(ClearMixerFilter4TestInstance,
                         ClearMixerFilter4Test,
                         ::testing::ValuesIn(TestParamInitializer::GetInstance().test_params));
 
-INSTANTIATE_TEST_CASE_P(ClearMixerFilter4TestRatio1Instance,
+INSTANTIATE_TEST_SUITE_P(ClearMixerFilter4TestRatio1Instance,
                         ClearMixerFilter4TestRatio1,
                         ::testing::ValuesIn(TestParamInitializer::GetInstance().test_ratio1_params));

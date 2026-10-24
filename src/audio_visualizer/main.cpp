@@ -12,7 +12,7 @@
 #include "gflags/gflags.h"
 #include "sndfile.h"
 #include "CImg.h"
-#include "ipp.h"
+#include "bakuage/dsp.h"
 #include <oneapi/tbb.h>
 #include <oneapi/tbb/scalable_allocator.h>
 #include <oneapi/tbb/cache_aligned_allocator.h>
@@ -145,9 +145,7 @@ int main(int argc, char* argv[]) {
     }
 #endif
 
-    ippInit();
-    const IppLibraryVersion *lib = ippGetLibVersion();
-    std::cerr << "Ipp initialized " << lib->Name << " " << lib->Version << std::endl;
+    bakuage::InitializeDsp();
     PrintMemoryUsage();
 
     tbb::global_control tbb_limit(tbb::global_control::max_allowed_parallelism,

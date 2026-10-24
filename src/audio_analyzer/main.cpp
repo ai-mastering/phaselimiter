@@ -10,7 +10,7 @@
 #include <fstream>
 #include <stdexcept>
 
-#include "ipp.h"
+#include "bakuage/dsp.h"
 #include "gflags/gflags.h"
 #include "picojson.h"
 
@@ -79,9 +79,7 @@ int main(int argc, char* argv[]) {
         if (FLAGS_worker_count < 0)
             throw std::invalid_argument("worker_count must be nonnegative");
 
-		ippInit();
-		const IppLibraryVersion *lib = ippGetLibVersion();
-		std::cerr << "Ipp initialized " << lib->Name << " " << lib->Version << std::endl;
+		bakuage::InitializeDsp();
 		PrintMemoryUsage();
 
 		tbb::global_control tbb_limit(tbb::global_control::max_allowed_parallelism,

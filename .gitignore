@@ -48,3 +48,5 @@ version.h
 __pycache__
 
 .vscode/*
+
+.local-sdk

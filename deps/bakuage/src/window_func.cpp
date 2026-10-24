@@ -1,5 +1,7 @@
 #include "bakuage/window_func.h"
+#ifndef BAKUAGE_USE_ACCELERATE
 #include "ipp.h"
+#endif
 
 namespace bakuage {
 #if 0
