@@ -11,6 +11,10 @@ The limiter and automated mastering engine used by Onatsu Bakuage-kun.
 - Results: IPP was generally fast, with little difference between the two versions. Alternatives worth considering are PFFFT for small single-precision transforms and FFTW for larger transforms or double precision. RealFFT performed close to FFTW. PocketFFT was slower through the public API used in this comparison.
 - Small differences are indicative only because VM performance varies. Windows, macOS, and ARM performance was not measured.
 
+See the [GradCore FFT replacement research notes](docs/gradcore-fft-research.md)
+(in Japanese) for the separate Ryzen 9 9950X experiments, integrated timings,
+numerical limitations, and instructions for resuming the research.
+
 ## Global optimization library benchmark
 
 - Solvers: DE-PRMM from the repository's pinned optim and the latest upstream optim, active CMA-ES from libcmaes, jDE from pagmo, MLSL-LDS + Sbplx from NLopt, and global_function_search from dlib.
@@ -60,6 +64,10 @@ The limiter schedules boundary FFT work as soon as its overlapping interior
 regions finish. See the [parallelization research notes](docs/phase-limiter-parallelization.md)
 (in Japanese) for the implementation, benchmark comparisons, source FFT cache
 tradeoffs, and reproduction instructions.
+
+See the [GradCore AVX-512 research notes](docs/gradcore-avx512.md) (in Japanese)
+for single-thread SIMD width comparisons, reproduction conditions, and unresolved
+frequency-boundary behavior.
 
 For `--mastering --mastering_mode=mastering5`, the default `de_prmm` solver
 accepts `--mastering5_optimization_seed=1` (also the default). Each population
