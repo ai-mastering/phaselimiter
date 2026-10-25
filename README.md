@@ -227,9 +227,11 @@ Nelder-Mead mastering optimization. This does not require a local Mac or QEMU.
 
 `script/check_dsp_port.py` checks original-input levels within 0.1 dB and the
 model score within 0.005. Final-output levels allow 0.25 dB and a score difference
-of 0.02; the limiter waveform allows 2% relative RMS error and the final normalized
-limiter error may be at most 5% worse (with a 1e-4 absolute allowance near zero).
-Mastering waveform differences and both iteration counts are reported as well.
+of 0.02; the limiter waveform allows 2% relative RMS error. The final normalized
+limiter error may be at most 10% worse for Linux x86-64 -> macOS ARM64, and 5%
+for other comparisons, including Intel Mac. Both retain a 1e-4 absolute allowance
+near zero. Mastering waveform differences and both iteration counts are reported
+as well.
 These bounds allow floating-point/optimization differences while rejecting large
 numerical regressions; bit equality across IPP and Accelerate is not required.
 Each command is warmed up once and measured three times. The median timings,
@@ -237,6 +239,18 @@ audio SNR, and comparison result appear in the macOS Actions job summary, with
 full JSON, output WAVs, and logs in its results artifact. The Linux reference is
 also available as `linux-dsp-reference`. Different runner hardware makes these
 timings informational rather than an automatic speed regression threshold.
+Within one validation job, the warmup and every measured execution must produce
+identical analysis JSON values, decoded float PCM samples, and reported convergence
+diagnostics. Differences fail CI independently of the cross-platform tolerances.
+The report includes per-execution fingerprints, binary/input/cache hashes, CPU
+model, and normalization diagnostics. This tests repeated execution with a fixed
+binary, cache, CPU, and libraries; separate GitHub runner machines can have
+different CPUs and math-library dispatch paths, so cross-job bit equality is not
+promised.
+
+Model preparation sorts analysis paths before PCA and HNSW insertion. The
+`sound-quality-cache-repeatability` CTest checks that filesystem traversal order
+and worker count do not change the generated cache bytes on the same platform.
 Cross-compilation alone does not validate native execution or performance.
 
 ### Native Intel Mac

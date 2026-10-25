@@ -1,4 +1,5 @@
 #include "gflags/gflags.h"
+#include <algorithm>
 #include <boost/archive/binary_oarchive.hpp>
 #include <boost/archive/text_oarchive.hpp>
 #include <boost/filesystem.hpp>
@@ -19,6 +20,9 @@ void PrepareSoundQuality2() {
         if (!bakuage::StrEndsWith(path, ".json")) continue;
         paths.emplace_back(path);
     }
+    // Filesystem enumeration order is not stable across fresh dataset checkouts.
+    // It affects PCA accumulation and HNSW insertion order, hence model results.
+    std::sort(paths.begin(), paths.end());
     calculator.PrepareFromPaths(paths.begin(), paths.end());
     if (FLAGS_sound_quality2_cache_archiver == "binary") {
 		std::ofstream ofs(FLAGS_sound_quality2_cache, std::ios::binary);

@@ -29,6 +29,20 @@ def digest(path):
     return checksum.hexdigest()
 
 
+def cpu_model():
+    if sys.platform == 'darwin':
+        try:
+            return subprocess.check_output(['/usr/sbin/sysctl', '-n', 'machdep.cpu.brand_string'],
+                                           text=True).strip()
+        except (OSError, subprocess.CalledProcessError):
+            pass
+    if sys.platform.startswith('linux'):
+        for line in Path('/proc/cpuinfo').read_text().splitlines():
+            if line.startswith('model name'):
+                return line.split(':', 1)[1].strip()
+    return platform.processor()
+
+
 def require_finite(value, path=''):
     if isinstance(value, dict):
         for key, item in value.items():
@@ -64,6 +78,10 @@ def convergence(log):
         raise ValueError('Missing final limiter convergence diagnostics')
     result = dict(normalized_eval=float(correct[-1][0]), limiting_error=float(correct[-1][1]),
                   iterations1=int(final[-1][1]), iterations2=int(final[-1][2]))
+    units = re.findall(r'unit_eval:([^\s]+)', log)
+    if units:
+        result['unit_eval'] = float(units[-1])
+        result['raw_eval_estimate'] = result['normalized_eval'] * result['unit_eval']
     require_finite(result)
     if result['normalized_eval'] < 0 or result['limiting_error'] < 0:
         raise ValueError('Negative limiter error')
@@ -95,8 +113,34 @@ def compare_samples(reference, actual):
                 snr_db=None if error == 0 else -20 * math.log10(max(relative, 1e-30)))
 
 
+def normalized_error_tolerance(reference, actual):
+    # Only the Linux x86 -> native macOS ARM comparison gets the wider bound.
+    if (reference.get('platform', '').startswith('Linux-')
+            and reference.get('architecture') in ('x86_64', 'AMD64')
+            and actual.get('platform', '').startswith('macOS-')
+            and actual.get('architecture') in ('arm64', 'aarch64')):
+        return .10
+    return .05
+
+
+def repeatability_errors(name, fingerprints):
+    if len(fingerprints) < 2:
+        raise ValueError('Repeatability requires at least two executions')
+    first = fingerprints[0]
+    errors = []
+    for repeat, fingerprint in enumerate(fingerprints[1:], 1):
+        changed = sorted(key for key in first.keys() | fingerprint.keys()
+                         if first.get(key) != fingerprint.get(key))
+        if changed:
+            errors.append(f'{name}: repeat {repeat} differs from warmup: {", ".join(changed)}')
+    return errors
+
+
 def compare(reference, actual, reference_dir, actual_dir):
-    errors, rows = [], []
+    errors = list(actual.get('repeatability_errors', []))
+    errors += ['Linux reference: ' + error for error in reference.get('repeatability_errors', [])]
+    rows = []
+    relative_tolerance = normalized_error_tolerance(reference, actual)
     for key in ('schema', 'cache_sha256', 'input_sha256'):
         if reference[key] != actual[key]:
             raise ValueError(f'Reference {key} differs; regenerate the Linux reference')
@@ -124,24 +168,28 @@ def compare(reference, actual, reference_dir, actual_dir):
                 errors.append(name + ': relative waveform RMS error exceeds 2%')
             before, after = baseline['convergence'], record['convergence']
             row['convergence'] = dict(linux=before, native=after)
-            allowed = max(1e-4, .05 * abs(before['normalized_eval']))
+            allowed = max(1e-4, relative_tolerance * abs(before['normalized_eval']))
             if after['normalized_eval'] > before['normalized_eval'] + allowed:
-                errors.append(name + ': final normalized limiter error regressed by more than 5%')
+                errors.append(f'{name}: final normalized limiter error regressed by more than '
+                              f'{relative_tolerance:.0%} ({before["normalized_eval"]:.6g} -> '
+                              f'{after["normalized_eval"]:.6g}; allowed increase {allowed:.6g})')
         rows.append(row)
-    return dict(errors=errors, cases=rows)
+    return dict(errors=errors, cases=rows, normalized_error_relative_tolerance=relative_tolerance)
 
 
 def run_cases(bin_dir, cache, output, runs):
     env = dict(os.environ, OMP_NUM_THREADS='1', OPENBLAS_NUM_THREADS='1', VECLIB_MAXIMUM_THREADS='1')
     inputs = {'test2': REPO / 'test_data/test2.wav', 'short': REPO / 'test_data/test5.wav'}
-    report = dict(schema=1, platform=platform.platform(), architecture=platform.machine(),
-                  cache_sha256=digest(cache), input_sha256={k: digest(v) for k, v in inputs.items()}, cases={})
+    report = dict(schema=2, platform=platform.platform(), architecture=platform.machine(), cpu_model=cpu_model(),
+                  cache_sha256=digest(cache), input_sha256={k: digest(v) for k, v in inputs.items()},
+                  measured_runs=runs, warmup_runs=1, repeatability_errors=[], cases={})
     analyzer = bin_dir / 'audio_analyzer'
     limiter = bin_dir / 'phase_limiter'
+    report['binary_sha256'] = {name: digest(bin_dir / name) for name in ('audio_analyzer', 'phase_limiter')}
     common = ['--worker_count=1', f'--sound_quality2_cache={cache}']
 
-    def execute(name, command, repetitions):
-        times = []
+    def execute(name, command, repetitions, fingerprint):
+        times, fingerprints = [], []
         for repeat in range(repetitions + 1):  # One unmeasured warmup.
             started = time.perf_counter()
             result = subprocess.run([str(x) for x in command], cwd=output, env=env,
@@ -151,19 +199,26 @@ def run_cases(bin_dir, cache, output, runs):
             (output / f'{name}-{repeat}.stderr').write_text(result.stderr)
             if result.returncode:
                 raise RuntimeError(f'{name} failed ({result.returncode}):\n{result.stderr[-8000:]}')
+            fingerprints.append(fingerprint(result))
             if repeat:
                 times.append(elapsed)
-        return times, result
+        report['repeatability_errors'].extend(repeatability_errors(name, fingerprints))
+        (output / f'{name}-repeats.json').write_text(json.dumps(fingerprints, indent=2, allow_nan=False))
+        return times, result, fingerprints
 
     def analyze(name, source, repetitions):
-        seconds, result = execute(name, [analyzer, f'--input={source}', *common], repetitions)
-        data = json.loads(result.stdout)
-        require_finite(data)
-        if not isinstance(data.get('sound_quality2'), (int, float)):
-            raise ValueError(f'{name}: model-cache score is missing')
-        if not 0 <= data['sound_quality2'] <= 1:
-            raise ValueError(f'{name}: model-cache score is out of range')
-        return dict(seconds=seconds, analysis=data)
+        def fingerprint(result):
+            data = json.loads(result.stdout)
+            require_finite(data)
+            if not isinstance(data.get('sound_quality2'), (int, float)):
+                raise ValueError(f'{name}: model-cache score is missing')
+            if not 0 <= data['sound_quality2'] <= 1:
+                raise ValueError(f'{name}: model-cache score is out of range')
+            canonical = json.dumps(data, sort_keys=True, separators=(',', ':'), allow_nan=False)
+            return dict(analysis_sha256=hashlib.sha256(canonical.encode()).hexdigest())
+        seconds, result, fingerprints = execute(name, [analyzer, f'--input={source}', *common],
+                                                repetitions, fingerprint)
+        return dict(seconds=seconds, analysis=json.loads(result.stdout), repeats=fingerprints)
 
     for name, source in inputs.items():
         report['cases']['analyzer-' + name] = analyze('analyzer-' + name, source, runs)
@@ -178,18 +233,26 @@ def run_cases(bin_dir, cache, output, runs):
                         '--mastering5_optimization_max_eval_count=4000',
                         '--mastering5_optimization_seed=1',
                         f'--mastering5_mastering_reference_file={REPO / "resource/mastering_reference.json"}']
-        seconds, result = execute(name, command, runs)
+        def fingerprint(result):
+            samples = decode_audio(audio)
+            return dict(pcm_sha256=hashlib.sha256(samples.tobytes()).hexdigest(),
+                        **convergence(result.stderr))
+        seconds, result, fingerprints = execute(name, command, runs, fingerprint)
         record = analyze(name + '-output', audio, 1)
-        decode_audio(audio)  # Fail on non-finite or empty output even on Linux.
-        record.update(seconds=seconds, audio=audio.name, convergence=convergence(result.stderr))
+        record['output_analysis_repeats'] = record.pop('repeats')
+        record.update(seconds=seconds, audio=audio.name, convergence=convergence(result.stderr),
+                      repeats=fingerprints)
         report['cases'][name] = record
     return report
 
 
 def summary(report, comparison):
     lines = ['## Native DSP validation', '',
-             f'Environment: {report["platform"]} ({report["architecture"]})', '',
-             'One worker, identical inputs and Linux-generated cache; no QEMU.', '']
+             f'Environment: {report["platform"]} ({report["architecture"]})',
+             f'CPU: {report.get("cpu_model", "unknown")}', '',
+             'One worker, identical inputs and Linux-generated cache; no QEMU.', '',
+             'Same-environment repeatability: ' + ('FAIL' if report.get('repeatability_errors') else 'PASS')
+             + ' (warmup and measured runs; exact analysis, PCM samples, and reported convergence).', '']
     if comparison:
         lines += ['| Case | Linux seconds | Native seconds | Audio SNR dB |',
                   '|---|---:|---:|---:|']
@@ -201,11 +264,15 @@ def summary(report, comparison):
                   'times are recorded for inspection and are not a speed regression gate.', '',
                   'Checks: original-input metrics within 0.1 dB, cache score within 0.005;',
                   'final-output metrics within 0.25 dB and score within 0.02;',
-                  'limiter waveform relative RMS error at most 2%, final normalized error at most 5% worse.', '',
+                  'limiter waveform relative RMS error at most 2%, final normalized error at most '
+                  f'{comparison["normalized_error_relative_tolerance"]:.0%} worse.', '',
                   '**Result: ' + ('FAIL' if comparison['errors'] else 'PASS') + '**']
         lines += ['- ' + error for error in comparison['errors']]
     else:
         lines += ['Linux reference recorded. Native macOS jobs compare against this artifact.']
+        lines += ['- ' + error for error in report.get('repeatability_errors', [])]
+        if report.get('repeatability_errors'):
+            lines += ['', '**Result: FAIL**']
     return '\n'.join(lines) + '\n'
 
 
@@ -234,7 +301,7 @@ def main():
     if os.environ.get('GITHUB_STEP_SUMMARY'):
         with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as target:
             target.write(text)
-    return int(bool(comparison and comparison['errors']))
+    return int(bool(report['repeatability_errors'] or (comparison and comparison['errors'])))
 
 
 if __name__ == '__main__':

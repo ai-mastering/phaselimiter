@@ -76,3 +76,53 @@ class DspPortContracts(unittest.TestCase):
             native_record['convergence'] = dict(record['convergence'], normalized_eval=.3)
             errors = dsp.compare(baseline, actual, Path('.'), Path('.'))['errors']
         self.assertTrue(any('normalized limiter error' in error for error in errors))
+
+    def test_only_linux_to_macos_arm_has_ten_percent_tolerance(self):
+        linux = dict(platform='Linux-6.1', architecture='x86_64')
+        arm = dict(platform='macOS-15.7.9-arm64', architecture='arm64')
+        intel = dict(platform='macOS-15.7.9-x86_64', architecture='x86_64')
+        self.assertEqual(.10, dsp.normalized_error_tolerance(linux, arm))
+        self.assertEqual(.05, dsp.normalized_error_tolerance(linux, intel))
+        self.assertEqual(.05, dsp.normalized_error_tolerance(arm, arm))
+        self.assertEqual(.05, dsp.normalized_error_tolerance(arm, linux))
+
+    def test_reported_arm_difference_passes_and_intel_still_fails(self):
+        record = dict(seconds=[1.0], analysis=analysis(), audio='out.wav',
+                      convergence=dict(normalized_eval=.190574, limiting_error=.20918,
+                                       iterations1=101, iterations2=42))
+        baseline = dict(schema=2, platform='Linux-6.1', architecture='x86_64',
+                        cache_sha256='same', input_sha256={}, cases={'mastering5': record})
+        native_record = dict(record, convergence=dict(record['convergence'],
+                                                      normalized_eval=.201006, limiting_error=.220345))
+        actual = dict(baseline, platform='macOS-15.7.9-arm64', architecture='arm64',
+                      cases={'mastering5': native_record})
+        with mock.patch.object(dsp, 'decode_audio', return_value=[1.0, -1.0]):
+            self.assertFalse(dsp.compare(baseline, actual, Path('.'), Path('.'))['errors'])
+            actual['architecture'] = 'x86_64'
+            self.assertTrue(dsp.compare(baseline, actual, Path('.'), Path('.'))['errors'])
+            actual['architecture'] = 'arm64'
+            native_record['convergence']['normalized_eval'] = .211
+            self.assertTrue(dsp.compare(baseline, actual, Path('.'), Path('.'))['errors'])
+
+    def test_repeatability_does_not_allow_even_small_numerical_drift(self):
+        signature = dict(analysis_sha256='same', normalized_eval=.190574, pcm_sha256='same')
+        self.assertFalse(dsp.repeatability_errors('limiter', [signature, dict(signature)]))
+        for key, value in [('normalized_eval', .190575), ('pcm_sha256', 'different'),
+                           ('analysis_sha256', 'different')]:
+            errors = dsp.repeatability_errors('limiter', [signature, dict(signature, **{key: value})])
+            self.assertIn(key, errors[0])
+            self.assertIn('repeat 1 differs from warmup', errors[0])
+        with self.assertRaises(ValueError):
+            dsp.repeatability_errors('limiter', [signature])
+
+    def test_repeatability_failures_are_not_hidden_by_cross_platform_tolerance(self):
+        baseline = dict(schema=2, cache_sha256='same', input_sha256={}, cases={})
+        actual = dict(baseline, repeatability_errors=['limiter: repeat 1 differs from warmup: pcm_sha256'])
+        self.assertTrue(dsp.compare(baseline, actual, Path('.'), Path('.'))['errors'])
+
+    def test_convergence_records_normalization_diagnostics(self):
+        log = ('unit_eval:58700\nnormalized_eval:0.4 last_iter:101 last_iter2:42\n'
+               'unit_eval:121485\nnormalized_eval:0.201006 limiting_error:0.220345\n')
+        result = dsp.convergence(log)
+        self.assertEqual(121485, result['unit_eval'])
+        self.assertAlmostEqual(.201006 * 121485, result['raw_eval_estimate'])

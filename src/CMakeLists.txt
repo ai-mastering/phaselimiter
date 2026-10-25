@@ -113,6 +113,10 @@ if(BUILD_TESTING)
     "${PROJECT_SOURCE_DIR}/script/test_audio_boundaries.py"
     "--tool=$<TARGET_FILE:snd_file_info>")
 
+  add_test(NAME sound-quality-cache-repeatability COMMAND "${Python3_EXECUTABLE}"
+    "${PROJECT_SOURCE_DIR}/script/test_sound_quality_cache.py"
+    "--tool=$<TARGET_FILE:audio_analyzer>")
+
   add_test(NAME limiter-io COMMAND "${Python3_EXECUTABLE}"
     "${PROJECT_SOURCE_DIR}/script/test_limiter_io.py"
     "--tool=$<TARGET_FILE:phase_limiter>")
