@@ -21,6 +21,11 @@ template <> struct AccelerateFft<float> {
         DSPSplitComplex split = {data, data + 1};
         vDSP_fft_zip(setup, &split, 2, order, inverse ? FFT_INVERSE : FFT_FORWARD);
     }
+    // Packed split-complex real FFT: re[0] = DC, im[0] = Nyquist, re/im[k] = bin k.
+    static void ExecuteReal(Setup setup, float *re, float *im, int order, bool inverse) {
+        DSPSplitComplex split = {re, im};
+        vDSP_fft_zrip(setup, &split, 1, order, inverse ? FFT_INVERSE : FFT_FORWARD);
+    }
 };
 template <> struct AccelerateFft<double> {
     using Setup = FFTSetupD;
@@ -29,6 +34,10 @@ template <> struct AccelerateFft<double> {
     static void Execute(Setup setup, double *data, int order, bool inverse) {
         DSPDoubleSplitComplex split = {data, data + 1};
         vDSP_fft_zipD(setup, &split, 2, order, inverse ? FFT_INVERSE : FFT_FORWARD);
+    }
+    static void ExecuteReal(Setup setup, double *re, double *im, int order, bool inverse) {
+        DSPDoubleSplitComplex split = {re, im};
+        vDSP_fft_zripD(setup, &split, 1, order, inverse ? FFT_INVERSE : FFT_FORWARD);
     }
 };
 
@@ -76,6 +85,14 @@ public:
         }
     }
     const int length;
+
+    // vDSP's real FFT (zrip) computes the same transform as the complex path
+    // at roughly half the work. It is only available for radix-2 lengths.
+    bool supportsRealFft() const { return setup != nullptr; }
+    void ExecuteReal(T *re, T *im, bool inverse) const {
+        AccelerateFft<T>::ExecuteReal(setup, re, im, order, inverse);
+    }
+
 private:
     int order;
     typename AccelerateFft<T>::Setup setup;
@@ -95,6 +112,43 @@ enum class Format { Ccs, Perm, Pack };
 template <class T> void RealForward(const Plan<T> &plan, const T *src, T *dest, void *work, Format format) {
     const int n = plan.length;
     if (!work) throw std::invalid_argument("FFT workspace is required");
+    if (plan.supportsRealFft()) {
+        const int h = n / 2;
+        auto *re = static_cast<T *>(work);
+        auto *im = re + h;
+        // vDSP's real FFT returns twice the unnormalised DFT; fold the
+        // factor into the input copy so the public output matches IPP.
+        for (int i = 0; i < h; ++i) {
+            re[i] = src[2 * i] * T(0.5);
+            im[i] = src[2 * i + 1] * T(0.5);
+        }
+        plan.ExecuteReal(re, im, false);
+        if (format == Format::Ccs) {
+            dest[0] = re[0];
+            dest[1] = 0;
+            for (int k = 1; k < h; ++k) {
+                dest[2 * k] = re[k];
+                dest[2 * k + 1] = im[k];
+            }
+            dest[n] = im[0];
+            dest[n + 1] = 0;
+        } else if (format == Format::Perm && n % 2 == 0) {
+            dest[0] = re[0];
+            dest[1] = im[0];
+            for (int k = 1; k < h; ++k) {
+                dest[2 * k] = re[k];
+                dest[2 * k + 1] = im[k];
+            }
+        } else {
+            dest[0] = re[0];
+            for (int k = 1; k < h; ++k) {
+                dest[2 * k - 1] = re[k];
+                dest[2 * k] = im[k];
+            }
+            dest[n - 1] = im[0];
+        }
+        return;
+    }
     auto *spectrum = static_cast<T *>(work);
     for (int i = 0; i < n; ++i) {
         spectrum[2 * i] = src[i];
@@ -118,6 +172,39 @@ template <class T> void RealForward(const Plan<T> &plan, const T *src, T *dest, 
 template <class T> void RealBackward(const Plan<T> &plan, const T *src, T *dest, void *work, Format format) {
     const int n = plan.length;
     if (!work) throw std::invalid_argument("FFT workspace is required");
+    if (plan.supportsRealFft()) {
+        const int h = n / 2;
+        auto *re = static_cast<T *>(work);
+        auto *im = re + h;
+        if (format == Format::Ccs) {
+            re[0] = src[0];
+            im[0] = src[n];
+            for (int k = 1; k < h; ++k) {
+                re[k] = src[2 * k];
+                im[k] = src[2 * k + 1];
+            }
+        } else if (format == Format::Perm && n % 2 == 0) {
+            re[0] = src[0];
+            im[0] = src[1];
+            for (int k = 1; k < h; ++k) {
+                re[k] = src[2 * k];
+                im[k] = src[2 * k + 1];
+            }
+        } else {
+            re[0] = src[0];
+            im[0] = src[n - 1];
+            for (int k = 1; k < h; ++k) {
+                re[k] = src[2 * k - 1];
+                im[k] = src[2 * k];
+            }
+        }
+        plan.ExecuteReal(re, im, true);
+        for (int i = 0; i < h; ++i) {
+            dest[2 * i] = re[i];
+            dest[2 * i + 1] = im[i];
+        }
+        return;
+    }
     auto *spectrum = static_cast<T *>(work);
     if (format == Format::Ccs) {
         std::copy(src, src + 2 * (n / 2 + 1), spectrum);
