@@ -6,7 +6,9 @@ import tempfile
 import unittest
 
 import fixtures
+import peak_reference
 import report
+import run_peak_probe
 
 
 class ReferenceTests(unittest.TestCase):
@@ -93,6 +95,61 @@ class ReportTests(unittest.TestCase):
             changed['backend'] = 'ipp'
             (directories[0] / 'run.json').write_text(json.dumps(changed))
             self.assertTrue(any('IPP/QEMU' in issue for issue in report.summarize(directories)['problems']))
+
+
+class PeakReferenceTests(unittest.TestCase):
+    def test_probe_requires_all_original_cases_and_detectable_endpoint_controls(self):
+        metadata = dict(backends=['pocketfft'], contracts=['off'])
+        self.assertTrue(run_peak_probe.validation_problems([], metadata))
+        rows = []
+        for precision in ('float', 'double'):
+            for domain in ('real', 'complex'):
+                base = dict(backend='pocketfft', precision=precision, domain=domain, fp_contract='off',
+                            scatter_max_error=0)
+                rows.append(dict(base, original_case=True, filter='lowpass', fault='none'))
+                for fault in ('drop_dc', 'drop_nyquist', 'mix_dc_nyquist'):
+                    rows.append(dict(base, original_case=False, filter='endpoints', fault=fault,
+                                     product_dc_error=.1, product_nyquist_error=.1, wave_max_abs_error=.1))
+        self.assertFalse(run_peak_probe.validation_problems(rows, metadata))
+        broken = copy.deepcopy(rows)
+        broken[2]['product_nyquist_error'] = 0
+        broken[2]['wave_max_abs_error'] = 0
+        self.assertTrue(any('not detected' in problem for problem in run_peak_probe.validation_problems(broken, metadata)))
+        broken = copy.deepcopy(rows)
+        broken[0]['perm_comparison_max_error'] = 1e-7
+        self.assertTrue(any('Perm/canonical' in problem for problem in run_peak_probe.validation_problems(broken, metadata)))
+
+    def test_reference_fft_agrees_with_direct_dft(self):
+        with localcontext() as context:
+            context.prec = 80
+            for n in (1, 2, 4, 8, 16, 32):
+                values = [(D(i - n // 2) / 16, D(i % 3) / 8) for i in range(n)]
+                actual = peak_reference.decimal_fft(values)
+                expected = fixtures.direct_dft(values)
+                self.assertLess(max(abs(x - y) for a, b in zip(actual, expected)
+                                    for x, y in zip(a, b)), D('1e-70'))
+
+    def test_bessel_reference_and_ideal_impulse_peak(self):
+        with localcontext() as context:
+            context.prec = 80
+            self.assertEqual(peak_reference.bessel_i0(D(0)), D(1))
+            self.assertLess(abs(peak_reference.bessel_i0(D(1))
+                                - D('1.266065877752008335598244625214717537607670311354962206808135331213575016122776')), D('1e-70'))
+            fir = peak_reference.ideal_fir()
+            self.assertEqual(fir, fir[::-1])
+            self.assertEqual(fir[2048], (D('.25'), D(0)))
+            self.assertEqual(max(abs(re) * 4 for re, _ in fir), D(1))
+            for i, (re, im) in enumerate(fir):
+                self.assertEqual(im, 0)
+                if i != 2048 and (i - 2048) % 4 == 0:
+                    self.assertEqual(re, 0)
+
+    def test_reported_failure_is_exactly_the_float_predecessor_of_one(self):
+        import math
+        import struct
+        value = struct.unpack('<f', struct.pack('<I', 0x3f7fffff))[0]
+        db = struct.unpack('<f', struct.pack('<f', 20 * math.log10(value)))[0]
+        self.assertEqual(db, -5.1771939979516901e-07)
 
 
 if __name__ == '__main__':

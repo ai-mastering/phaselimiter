@@ -63,6 +63,17 @@ jobs:
           python3 experiments/fft/report.py --results experiments/fft/.work/results \
             --output experiments/fft/.work/summary
           cat experiments/fft/.work/summary/summary.md >> "$GITHUB_STEP_SUMMARY"
+      - name: Investigate the original true-peak impulse failure
+        if: always()
+        run: |
+          python3 experiments/fft/run_peak_probe.py --backends '${{ matrix.backends }}' --jobs 2 \
+            --output-dir experiments/fft/.work/results/peak-probe
+      - name: Publish true-peak diagnostics
+        if: always()
+        run: |
+          if [ -f experiments/fft/.work/results/peak-probe/peak-summary.md ]; then
+            cat experiments/fft/.work/results/peak-probe/peak-summary.md >> "$GITHUB_STEP_SUMMARY"
+          fi
       - uses: actions/upload-artifact@v4
         if: always()
         with:
