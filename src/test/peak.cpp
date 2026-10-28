@@ -14,7 +14,9 @@ TEST(AudioAnalyzerPeak, Impulse) {
     
     EXPECT_NEAR(0, peak, 1e-7);
     EXPECT_NEAR(10 * std::log10(1.0 / (channels * samples)), rms, 1e-6);
-    EXPECT_NEAR(0, true_peak, 1e-7);
+    // Float FFT convolution can move the unit impulse peak by a few ULPs.
+    // Allow that rounding after conversion to dB across DSP backends.
+    EXPECT_NEAR(0, true_peak, 2e-6);
 }
 
 TEST(AudioAnalyzerPeak, LowpassTruePeak) {

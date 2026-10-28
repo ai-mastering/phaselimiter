@@ -8,6 +8,7 @@
 #include <vector>
 #include "bakuage/dft.h"
 #include "bakuage/fir_filter.h"
+#include "bakuage/fir_filter2.h"
 #include "bakuage/fir_filter4.h"
 #include "bakuage/vector_math.h"
 #include "phase_limiter/GradCalculator.h"
@@ -198,6 +199,91 @@ template <class T> void CheckRealDftAnalyticSpectra() {
 
 TEST(DspBackend, RealDftAnalyticSpectraFloat) { CheckRealDftAnalyticSpectra<float>(); }
 TEST(DspBackend, RealDftAnalyticSpectraDouble) { CheckRealDftAnalyticSpectra<double>(); }
+
+namespace {
+template <class T> void CheckPermEndpointConvolution() {
+    // Dyadic values and power-of-two lengths make these endpoint-only
+    // transforms exact. DC and Nyquist have different, nonzero filter gains.
+    const T taps[] = {T(.5), T(.25), T(-.125), T(.0625)};
+    for (int n : {4, 256, 1024, 4096, 16384}) {
+        SCOPED_TRACE(n);
+        bakuage::RealDft<T> fft(n);
+        std::vector<T> kernel(n);
+        std::copy(taps, taps + 4, kernel.begin());
+        bakuage::AlignedPodVector<std::complex<T>> filter(n / 2), spectrum(n / 2);
+        fft.ForwardPerm(kernel.data(), reinterpret_cast<T *>(filter.data()));
+        EXPECT_EQ(T(.6875), filter[0].real());
+        EXPECT_EQ(T(.0625), filter[0].imag());
+        for (auto &bin : filter) bin /= T(n);
+        for (int signal = 0; signal < 3; ++signal) {
+            SCOPED_TRACE(signal);  // DC, Nyquist, then both.
+            std::vector<T> input(n), output(n);
+            for (int i = 0; i < n; ++i) {
+                input[i] = (signal != 1 ? T(.25) : T(0))
+                    + (signal != 0 ? (i % 2 ? T(-.125) : T(.125)) : T(0));
+            }
+            fft.ForwardPerm(input.data(), reinterpret_cast<T *>(spectrum.data()));
+            EXPECT_EQ(signal != 1 ? T(n) * T(.25) : T(0), spectrum[0].real());
+            EXPECT_EQ(signal != 0 ? T(n) * T(.125) : T(0), spectrum[0].imag());
+            for (int k = 1; k < n / 2; ++k) {
+                ASSERT_EQ(T(0), spectrum[k].real()) << "bin=" << k;
+                ASSERT_EQ(T(0), spectrum[k].imag()) << "bin=" << k;
+            }
+            bakuage::VectorMulPermInplace(filter.data(), spectrum.data(), n / 2);
+            EXPECT_EQ(signal != 1 ? T(.171875) : T(0), spectrum[0].real());
+            EXPECT_EQ(signal != 0 ? T(.0078125) : T(0), spectrum[0].imag());
+            fft.BackwardPerm(reinterpret_cast<const T *>(spectrum.data()), output.data());
+            for (int i = 0; i < n; ++i) {
+                T expected = 0;
+                for (int k = 0; k < 4; ++k) expected += taps[k] * input[(i - k + n) % n];
+                ASSERT_EQ(expected, output[i]) << "sample=" << i;
+            }
+        }
+    }
+}
+
+template <class T> void CheckFirEndpointConvolution() {
+    const T taps[] = {T(.5), T(.25), T(-.125), T(.0625)};
+    const double tolerance = std::is_same<T, float>::value ? 1e-6 : 1e-12;
+    const int n = 16384;
+    for (int signal = 0; signal < 3; ++signal) {
+        SCOPED_TRACE(signal);
+        std::vector<T> input(n + 3), output(input.size());
+        for (int i = 0; i < n; ++i) {
+            input[i] = (signal != 1 ? T(.25) : T(0))
+                + (signal != 0 ? (i % 2 ? T(-.125) : T(.125)) : T(0));
+        }
+        // 4097 coefficients select the same 16384-point FFT as true peak.
+        // Zero padding leaves the independent four-tap reference unchanged.
+        for (int filter_size : {4, 4097}) {
+            SCOPED_TRACE(filter_size);
+            std::vector<T> coefficients(filter_size);
+            std::copy(taps, taps + 4, coefficients.begin());
+            const std::vector<int> blocks = filter_size == 4
+                ? std::vector<int>{1, 7, 4096, 16384}
+                : std::vector<int>{4096, 12287, 16384};
+            for (int block : blocks) {
+                SCOPED_TRACE(block);
+                bakuage::FirFilter2<T> filter(coefficients.begin(), coefficients.end());
+                for (int pos = 0; pos < static_cast<int>(input.size()); pos += block) {
+                    const int count = std::min<int>(block, input.size() - pos);
+                    filter.Clock(input.data() + pos, input.data() + pos + count, output.data() + pos);
+                }
+                for (int i = 0; i < static_cast<int>(output.size()); ++i) {
+                    double expected = 0;
+                    for (int k = 0; k < 4 && k <= i; ++k) expected += double(taps[k]) * input[i - k];
+                    ASSERT_NEAR(expected, output[i], tolerance) << "sample=" << i;
+                }
+            }
+        }
+    }
+}
+}
+
+TEST(DspBackend, PermEndpointConvolutionFloat) { CheckPermEndpointConvolution<float>(); }
+TEST(DspBackend, PermEndpointConvolutionDouble) { CheckPermEndpointConvolution<double>(); }
+TEST(DspBackend, FirEndpointConvolutionFloat) { CheckFirEndpointConvolution<float>(); }
+TEST(DspBackend, FirEndpointConvolutionDouble) { CheckFirEndpointConvolution<double>(); }
 TEST(DspBackend, ComplexDftFloat) { CheckComplexDft<float>(); }
 TEST(DspBackend, ComplexDftDouble) { CheckComplexDft<double>(); }
 TEST(DspBackend, MultirateFirFloat) { CheckMultirateFir<float>(); }
