@@ -1,4 +1,5 @@
 #include <gtest/gtest.h>
+#include <algorithm>
 #include <cmath>
 #include <complex>
 #include <limits>
@@ -113,6 +114,90 @@ template <class T> void CheckMultirateFir() {
 
 TEST(DspBackend, RealDftFloat) { CheckRealDft<float>(); }
 TEST(DspBackend, RealDftDouble) { CheckRealDft<double>(); }
+
+namespace {
+// Analytic spectra exercise DC/Nyquist packing and scaling independently of
+// the inverse transform, including the window sizes used by the limiter.
+template <class T> void CheckRealDftAnalyticSpectra() {
+    const double pi = std::acos(-1.0);
+    const double spectrum_tolerance = std::is_same<T, float>::value ? 2e-6 : 1e-12;
+    const double sample_tolerance = std::is_same<T, float>::value ? 3e-6 : 1e-11;
+    for (int n: {4, 256, 1024, 4096, 16384}) {
+        SCOPED_TRACE(n);
+        bakuage::RealDft<T> fft(n, true);
+        bakuage::FftMemoryBuffer work(fft.work_size());
+        for (int signal = 0; signal < 4; ++signal) {
+            SCOPED_TRACE(signal);
+            std::vector<T> input(n);
+            std::vector<std::complex<double>> expected(n / 2 + 1);
+            if (signal == 0) {
+                std::fill(input.begin(), input.end(), T(.25));
+                expected[0] = .25 * n;
+            } else if (signal == 1) {
+                for (int i = 0; i < n; ++i) input[i] = i % 2 ? T(-.25) : T(.25);
+                expected[n / 2] = .25 * n;
+            } else if (signal == 2) {
+                const int position = n / 3;
+                input[position] = T(.5);
+                for (int k = 0; k <= n / 2; ++k)
+                    expected[k] = std::polar(.5, -2 * pi * k * position / n);
+                expected[0].imag(0);
+                expected[n / 2].imag(0);
+            } else {
+                for (int i = 0; i < n; ++i)
+                    input[i] = T(.125 + .25 * std::cos(2 * pi * i / n)
+                                 + .375 * std::sin(2 * pi * i / n)
+                                 + (i % 2 ? -.0625 : .0625));
+                expected[0] = .125 * n;
+                expected[1] = { .125 * n, -.1875 * n };
+                expected[n / 2] = .0625 * n;
+            }
+            for (int format = 0; format < 3; ++format) {
+                SCOPED_TRACE(format);  // CCS, Pack, Perm.
+                std::vector<T> reference(format == 0 ? n + 2 : n, T(0));
+                reference[0] = T(expected[0].real());
+                for (int k = 1; k < n / 2; ++k) {
+                    const int offset = format == 1 ? 2 * k - 1 : 2 * k;
+                    reference[offset] = T(expected[k].real());
+                    reference[offset + 1] = T(expected[k].imag());
+                }
+                reference[format == 0 ? n : format == 1 ? n - 1 : 1]
+                    = T(expected[n / 2].real());
+                auto forward = [&](const T *src, T *dest) {
+                    if (format == 0) fft.Forward(src, dest, work.data());
+                    else if (format == 1) fft.ForwardPack(src, dest, work.data());
+                    else fft.ForwardPerm(src, dest, work.data());
+                };
+                auto backward = [&](const T *src, T *dest) {
+                    if (format == 0) fft.Backward(src, dest, work.data());
+                    else if (format == 1) fft.BackwardPack(src, dest, work.data());
+                    else fft.BackwardPerm(src, dest, work.data());
+                };
+                std::vector<T> output(reference.size()), restored(n);
+                forward(input.data(), output.data());
+                for (int i = 0; i < static_cast<int>(reference.size()); ++i)
+                    EXPECT_NEAR(reference[i], output[i], spectrum_tolerance * n);
+                // Use an independently constructed spectrum, not Forward's result.
+                backward(reference.data(), restored.data());
+                for (int i = 0; i < n; ++i)
+                    EXPECT_NEAR(input[i], restored[i] / n, sample_tolerance);
+                if (format != 0) {
+                    auto inplace = input;
+                    forward(inplace.data(), inplace.data());
+                    for (int i = 0; i < n; ++i)
+                        EXPECT_NEAR(reference[i], inplace[i], spectrum_tolerance * n);
+                    backward(inplace.data(), inplace.data());
+                    for (int i = 0; i < n; ++i)
+                        EXPECT_NEAR(input[i], inplace[i] / n, sample_tolerance);
+                }
+            }
+        }
+    }
+}
+}
+
+TEST(DspBackend, RealDftAnalyticSpectraFloat) { CheckRealDftAnalyticSpectra<float>(); }
+TEST(DspBackend, RealDftAnalyticSpectraDouble) { CheckRealDftAnalyticSpectra<double>(); }
 TEST(DspBackend, ComplexDftFloat) { CheckComplexDft<float>(); }
 TEST(DspBackend, ComplexDftDouble) { CheckComplexDft<double>(); }
 TEST(DspBackend, MultirateFirFloat) { CheckMultirateFir<float>(); }
