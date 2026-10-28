@@ -1,0 +1,32 @@
+{
+  "fftw": {
+    "version": "3.3.11",
+    "url": "https://www.fftw.org/fftw-3.3.11.tar.gz",
+    "sha256": "5630c24cdeb33b131612f7eb4b1a9934234754f9f388ff8617458d0be6f239a1",
+    "license": "GPL-2.0-or-later (separate commercial licensing available)"
+  },
+  "pocketfft": {
+    "version": "4d865cba24359b05b37da4e75aee24498c3b78e7",
+    "url": "https://codeload.github.com/mreineck/pocketfft/tar.gz/4d865cba24359b05b37da4e75aee24498c3b78e7",
+    "sha256": "db236e44b1020dd0b415e5040ce10d8be604fefb7ce83ec0b32bc0f78975aa2f",
+    "license": "BSD-3-Clause"
+  },
+  "kissfft": {
+    "version": "131.1.0 (8f47a67f595a6641c566087bf5277034be64f24d)",
+    "url": "https://codeload.github.com/mborgerding/kissfft/tar.gz/8f47a67f595a6641c566087bf5277034be64f24d",
+    "sha256": "93cfa11a344ad552472f7d93c228d55969ac586275692d73d5e7ce73a69b047f",
+    "license": "BSD-3-Clause"
+  },
+  "ipp-linux-devel": {
+    "version": "2021.9.0-49452",
+    "url": "https://apt.repos.intel.com/oneapi/pool/main/intel-oneapi-ipp-devel-2021.9.0-2021.9.0-49452_amd64.deb",
+    "sha256": "bf9403a19351c5382cfe0dcfe4e3cea5f47bd761128c0292e6b4bd8c80ae0948",
+    "license": "Intel package license"
+  },
+  "ipp-linux-common": {
+    "version": "2021.9.0-49452",
+    "url": "https://apt.repos.intel.com/oneapi/pool/main/intel-oneapi-ipp-common-devel-2021.9.0-2021.9.0-49452_all.deb",
+    "sha256": "4f2e927fee2d65db15c9df5f962cd4173ed704b838dc4da48f729c92a65805e4",
+    "license": "Intel package license"
+  }
+}

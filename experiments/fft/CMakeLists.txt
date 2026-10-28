@@ -1,0 +1,117 @@
+cmake_minimum_required(VERSION 3.23)
+project(fft_experiment LANGUAGES C CXX)
+
+# Intentionally independent of the application's CMake files and dependencies.
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
+set(FFT_BACKEND "pocketfft" CACHE STRING "accelerate, ipp, fftw, pocketfft, or kissfft")
+set(FFT_PRECISION "float" CACHE STRING "float or double")
+set(FFT_DEPS_DIR "${CMAKE_CURRENT_SOURCE_DIR}/.work/deps" CACHE PATH "Sources prepared by run.py")
+set(FFT_BUILD_JOBS 2 CACHE STRING "Parallelism for FFTW's nested make")
+set(FFT_IPP_ROOT "" CACHE PATH "Extracted IPP installation")
+set(FFT_FFTW_PLANNER "estimate" CACHE STRING "estimate or measure")
+if(NOT FFT_PRECISION MATCHES "^(float|double)$")
+  message(FATAL_ERROR "FFT_PRECISION must be float or double")
+endif()
+if(NOT FFT_FFTW_PLANNER MATCHES "^(estimate|measure)$")
+  message(FATAL_ERROR "FFT_FFTW_PLANNER must be estimate or measure")
+endif()
+
+file(READ "${CMAKE_CURRENT_SOURCE_DIR}/dependencies.json" dependency_manifest)
+set(backend_version "system")
+if(FFT_BACKEND MATCHES "^(fftw|pocketfft|kissfft)$")
+  string(JSON backend_version GET "${dependency_manifest}" "${FFT_BACKEND}" version)
+endif()
+add_executable(fft_experiment main.cpp "adapters/${FFT_BACKEND}.cpp")
+target_include_directories(fft_experiment PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
+target_compile_definitions(fft_experiment PRIVATE
+  FFT_BACKEND_NAME="${FFT_BACKEND}" FFT_BACKEND_VERSION="${backend_version}"
+  FFT_COMPILER="${CMAKE_CXX_COMPILER_ID}-${CMAKE_CXX_COMPILER_VERSION}"
+  FFT_TARGET="${CMAKE_SYSTEM_NAME}-${CMAKE_SYSTEM_PROCESSOR}"
+  FFT_FFTW_PLANNER="${FFT_FFTW_PLANNER}")
+if(FFT_PRECISION STREQUAL "double")
+  target_compile_definitions(fft_experiment PRIVATE FFT_DOUBLE)
+endif()
+if(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
+  target_compile_options(fft_experiment PRIVATE -Wall -Wextra -Werror -fno-fast-math -ffp-contract=off)
+endif()
+
+if(FFT_BACKEND STREQUAL "pocketfft")
+  target_include_directories(fft_experiment SYSTEM PRIVATE "${FFT_DEPS_DIR}/pocketfft")
+  # Use explicit reusable plans; no implicit global cache or worker threads.
+  target_compile_definitions(fft_experiment PRIVATE POCKETFFT_NO_MULTITHREADING)
+elseif(FFT_BACKEND STREQUAL "kissfft")
+  add_library(kissfft STATIC "${FFT_DEPS_DIR}/kissfft/kiss_fft.c" "${FFT_DEPS_DIR}/kissfft/kiss_fftr.c")
+  target_include_directories(kissfft PUBLIC "${FFT_DEPS_DIR}/kissfft")
+  target_compile_definitions(kissfft PUBLIC kiss_fft_scalar=${FFT_PRECISION} KISS_FFT_STATIC)
+  if(CMAKE_C_COMPILER_ID MATCHES "Clang|GNU")
+    target_compile_options(kissfft PRIVATE -fno-fast-math -ffp-contract=off)
+  endif()
+  target_link_libraries(fft_experiment PRIVATE kissfft)
+elseif(FFT_BACKEND STREQUAL "fftw")
+  # Upstream's autotools build enables ARM NEON; its CMake build does not.
+  include(ExternalProject)
+  find_program(FFT_MAKE make REQUIRED)
+  set(fftw_flags --disable-shared --enable-static --disable-fortran --disable-doc
+      --disable-threads --disable-openmp)
+  if(FFT_PRECISION STREQUAL "float")
+    list(APPEND fftw_flags --enable-single)
+    set(fftw_library fftw3f)
+  else()
+    set(fftw_library fftw3)
+  endif()
+  if(CMAKE_SYSTEM_PROCESSOR MATCHES "^(arm64|aarch64)$")
+    list(APPEND fftw_flags --enable-neon)
+  elseif(CMAKE_SYSTEM_PROCESSOR MATCHES "^(x86_64|AMD64|amd64)$")
+    list(APPEND fftw_flags --enable-sse2 --enable-avx --enable-avx2)
+    if(FFT_PRECISION STREQUAL "float")
+      list(APPEND fftw_flags --enable-sse)
+    endif()
+  endif()
+  if(CMAKE_CROSSCOMPILING)
+    if(NOT CMAKE_SYSTEM_PROCESSOR MATCHES "^(arm64|aarch64)$")
+      message(FATAL_ERROR "Only the Linux AArch64 cross toolchain is supported")
+    endif()
+    list(APPEND fftw_flags --host=aarch64-linux-gnu)
+  endif()
+  set(fftw_prefix "${CMAKE_CURRENT_BINARY_DIR}/fftw-install")
+  file(MAKE_DIRECTORY "${fftw_prefix}/include")
+  ExternalProject_Add(fftw_build
+    SOURCE_DIR "${FFT_DEPS_DIR}/fftw"
+    BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/fftw-build"
+    DOWNLOAD_COMMAND "" UPDATE_COMMAND ""
+    CONFIGURE_COMMAND "${CMAKE_COMMAND}" -E env "CC=${CMAKE_C_COMPILER}" "CFLAGS=-O3 -fno-fast-math"
+      <SOURCE_DIR>/configure "--prefix=${fftw_prefix}" ${fftw_flags}
+    BUILD_COMMAND "${FFT_MAKE}" "-j${FFT_BUILD_JOBS}"
+    INSTALL_COMMAND "${FFT_MAKE}" install
+    BUILD_BYPRODUCTS "${fftw_prefix}/lib/lib${fftw_library}.a")
+  add_library(fftw_library STATIC IMPORTED)
+  set_target_properties(fftw_library PROPERTIES
+    IMPORTED_LOCATION "${fftw_prefix}/lib/lib${fftw_library}.a"
+    INTERFACE_INCLUDE_DIRECTORIES "${fftw_prefix}/include")
+  add_dependencies(fftw_library fftw_build)
+  target_link_libraries(fft_experiment PRIVATE fftw_library)
+elseif(FFT_BACKEND STREQUAL "accelerate")
+  if(NOT APPLE)
+    message(FATAL_ERROR "Accelerate requires macOS")
+  endif()
+  find_library(ACCELERATE_LIBRARY Accelerate REQUIRED)
+  target_link_libraries(fft_experiment PRIVATE "${ACCELERATE_LIBRARY}")
+elseif(FFT_BACKEND STREQUAL "ipp")
+  if(NOT CMAKE_SYSTEM_PROCESSOR MATCHES "^(x86_64|AMD64|amd64)$")
+    message(FATAL_ERROR "IPP is the x86 accuracy baseline")
+  endif()
+  find_path(FFT_IPP_INCLUDE ipp.h HINTS "${FFT_IPP_ROOT}/include" REQUIRED NO_DEFAULT_PATH)
+  target_include_directories(fft_experiment SYSTEM PRIVATE "${FFT_IPP_INCLUDE}")
+  foreach(component ipps ippvm ippcore)
+    find_library(FFT_IPP_${component} NAMES ${component}
+      HINTS "${FFT_IPP_ROOT}/lib/intel64" "${FFT_IPP_ROOT}/lib" REQUIRED NO_DEFAULT_PATH)
+    target_link_libraries(fft_experiment PRIVATE "${FFT_IPP_${component}}")
+  endforeach()
+else()
+  message(FATAL_ERROR "Unknown FFT_BACKEND: ${FFT_BACKEND}")
+endif()
+if(UNIX)
+  target_link_libraries(fft_experiment PRIVATE m)
+endif()

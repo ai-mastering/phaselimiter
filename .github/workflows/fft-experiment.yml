@@ -1,0 +1,132 @@
+name: FFT experiment
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'experiments/fft/**'
+      - '.github/workflows/fft-experiment.yml'
+  pull_request:
+    paths:
+      - 'experiments/fft/**'
+      - '.github/workflows/fft-experiment.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  native:
+    name: FFT / ${{ matrix.name }}
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: macos-arm64
+            runner: macos-15
+            arch: arm64
+            backends: pocketfft,kissfft,fftw,accelerate
+          - name: linux-x86_64
+            runner: ubuntu-24.04
+            arch: x86_64
+            backends: pocketfft,kissfft,fftw,ipp
+    runs-on: ${{ matrix.runner }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Verify native architecture
+        run: test "$(uname -m)" = "${{ matrix.arch }}"
+      - name: Install build tools (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y cmake ninja-build build-essential
+      - name: Install build tools (macOS)
+        if: runner.os == 'macOS'
+        run: brew install ninja
+      - uses: actions/cache@v4
+        with:
+          path: experiments/fft/.work/downloads
+          key: fft-downloads-${{ runner.os }}-${{ matrix.arch }}-${{ hashFiles('experiments/fft/dependencies.json') }}
+      - name: Test reference generation and reporting
+        run: python3 -m unittest discover -s experiments/fft -p 'test_*.py' -v
+      - name: Build and measure libraries on the same runner
+        run: |
+          python3 experiments/fft/run.py --backends '${{ matrix.backends }}' --jobs 2 \
+            --output-dir experiments/fft/.work/results
+      - name: Summarize native results
+        if: always()
+        run: |
+          python3 experiments/fft/report.py --results experiments/fft/.work/results \
+            --output experiments/fft/.work/summary
+          cat experiments/fft/.work/summary/summary.md >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: fft-results-${{ matrix.name }}
+          path: |
+            experiments/fft/.work/results
+            experiments/fft/.work/summary
+          if-no-files-found: error
+          retention-days: 14
+
+  qemu:
+    name: FFT / Linux AArch64 correctness under QEMU
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install cross compiler and emulator
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake ninja-build make gcc-aarch64-linux-gnu g++-aarch64-linux-gnu qemu-user
+      - uses: actions/cache@v4
+        with:
+          path: experiments/fft/.work/downloads
+          key: fft-downloads-qemu-${{ hashFiles('experiments/fft/dependencies.json') }}
+      - name: Run portable FFTs under QEMU (no timings)
+        run: |
+          python3 experiments/fft/run.py --backends pocketfft,kissfft,fftw --qemu \
+            --fftw-planner estimate --jobs 2 --output-dir experiments/fft/.work/results
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: fft-results-linux-aarch64-qemu
+          path: experiments/fft/.work/results
+          if-no-files-found: error
+          retention-days: 14
+
+  compare:
+    name: FFT / accuracy comparison with x86 IPP
+    needs: [native, qemu]
+    if: always()
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: fft-results-*
+          path: experiments/fft/.work/artifacts
+      - name: Compare theory errors and output snapshots
+        run: |
+          python3 experiments/fft/report.py --results experiments/fft/.work/artifacts \
+            --output experiments/fft/.work/comparison --require-ipp --require-accelerate
+      - name: Publish summary
+        if: always()
+        run: cat experiments/fft/.work/comparison/summary.md >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: fft-comparison
+          path: experiments/fft/.work/comparison
+          if-no-files-found: error
+          retention-days: 14
