@@ -154,6 +154,13 @@ if(BUILD_TESTING)
   phaselimiter_enable_warnings(cmaes_optimizer_tests)
   add_test(NAME cmaes-optimizer COMMAND cmaes_optimizer_tests)
 
+  # GradCore caches frequency weights; isolate ERB settings in separate processes.
+  add_executable(grad_core_tests test/grad_core.cpp)
+  target_link_libraries(grad_core_tests PRIVATE phaselimiter_cli gtest)
+  phaselimiter_enable_warnings(grad_core_tests)
+  add_test(NAME grad-core COMMAND grad_core_tests)
+  add_test(NAME grad-core-erb COMMAND grad_core_tests --erb)
+
   add_executable(classic_detector_tests test/classic_detector.cpp)
   target_link_libraries(classic_detector_tests PRIVATE classic_detector gtest_main Boost::filesystem)
   phaselimiter_enable_warnings(classic_detector_tests)
